@@ -35,9 +35,12 @@ CATEGORY_ID = 163
 MAX_PAGES = 1          # Only 1 page per model (Avito bans after ~2 requests)
 DELAY_MIN = 6.0        # Delay between models
 DELAY_MAX = 12.0
-PRICE_MIN = 500
-PRICE_MAX = 500000
+PRICE_MIN = 1000       # Absolute minimum price (rubles)
+PRICE_MAX = 500000     # Absolute maximum price (rubles)
 MIN_RESULTS = 3
+# Dynamic filtering: after IQR, remove prices below this fraction of median
+# This catches accessories mixed into GPU search results
+MIN_PRICE_FRACTION = 0.30  # Price < 30% of median = likely not a GPU
 PAGE_TIMEOUT = 60000
 RENDER_WAIT = 8000
 
@@ -499,7 +502,7 @@ def main():
                 print(f"    NO PRICES ({full_name})")
                 failed.append(full_name)
             else:
-                # IQR filter
+                # Step 1: IQR outlier removal
                 sp = sorted(prices)
                 q1 = percentile(sp, 25)
                 q3 = percentile(sp, 75)
@@ -507,6 +510,19 @@ def main():
                 filtered = [pr for pr in prices if q1 - 1.5*iqr <= pr <= q3 + 1.5*iqr]
                 if len(filtered) < MIN_RESULTS:
                     filtered = prices
+
+                # Step 2: Dynamic fraction filter
+                # Remove prices below MIN_PRICE_FRACTION of median
+                # This catches accessories (water blocks, fans) mixed into GPU results
+                if len(filtered) >= MIN_RESULTS:
+                    med = percentile(sorted(filtered), 50)
+                    dynamic_min = med * MIN_PRICE_FRACTION
+                    fraction_filtered = [pr for pr in filtered if pr >= dynamic_min]
+                    if len(fraction_filtered) >= MIN_RESULTS:
+                        if debug and len(fraction_filtered) < len(filtered):
+                            removed = len(filtered) - len(fraction_filtered)
+                            print(f"  [FILTER] Removed {removed} prices below {round(dynamic_min):,} ({MIN_PRICE_FRACTION*100:.0f}% of median)")
+                        filtered = fraction_filtered
 
                 stats = calculate_stats(filtered)
                 if stats:
