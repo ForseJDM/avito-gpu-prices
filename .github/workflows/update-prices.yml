@@ -46,15 +46,17 @@ jobs:
 
       - name: Fetch prices
         run: |
-          ARGS="--debug"
-          if [ -n "${{ github.event.inputs.model }}" ]; then
-            ARGS="$ARGS --model '${{ github.event.inputs.model }}'"
+          CMD="python scripts/fetch_prices.py --debug"
+          MODEL="${{ github.event.inputs.model }}"
+          if [ -n "$MODEL" ]; then
+            CMD="$CMD --model $MODEL"
           fi
           LIMIT="${{ github.event.inputs.limit }}"
           if [ -n "$LIMIT" ] && [ "$LIMIT" != "0" ]; then
-            ARGS="$ARGS --limit $LIMIT"
+            CMD="$CMD --limit $LIMIT"
           fi
-          python scripts/fetch_prices.py $ARGS
+          echo "Running: $CMD"
+          eval $CMD
 
       - name: Validate prices
         run: |
