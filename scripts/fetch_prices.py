@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-Avito GPU Price Fetcher v2.1.1 (rev2)
+Avito GPU Price Fetcher v2.1.1 (rev3)
 Scrapes Avito search results for each GPU model, extracts prices,
 calculates median and percentiles, outputs prices.json.
 
-Uses Playwright with stealth patches to bypass Avito anti-bot.
-Extracts prices via page.evaluate() from rendered DOM.
+Strategy:
+  1. PRIMARY: Intercept Avito API responses (XHR) containing item data
+  2. SECONDARY: Extract embedded JSON from page (window.__INITIAL_STATE__)
+  3. FALLBACK: DOM-based extraction from rendered elements
 
 Usage:
     python fetch_prices.py [--template TEMPLATE] [--output OUTPUT] [--debug]
 
 Environment:
-    GITHUB_TOKEN — optional, for API rate limiting
+    GITHUB_TOKEN — optional
 """
 
 import json
@@ -21,7 +23,7 @@ import random
 import re
 import sys
 import time
-import hashlib
+import urllib.parse
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -30,20 +32,18 @@ from datetime import datetime, timezone
 # ---------------------------------------------------------------------------
 
 BASE_URL = "https://www.avito.ru/rossiya"
-CATEGORY_ID = 163  # Video cards category on Avito
-MAX_PAGES = 3      # Max pages per model
-DELAY_MIN = 3.0    # Min delay between requests (seconds) - longer for anti-bot
-DELAY_MAX = 7.0    # Max delay between requests (seconds)
-PRICE_MIN = 500    # Minimum price filter (rubles)
-PRICE_MAX = 500000 # Maximum price filter (rubles)
-MIN_RESULTS = 3    # Minimum number of prices to calculate stats (lowered for rare models)
-PAGE_TIMEOUT = 45000  # Page load timeout (ms)
-RENDER_WAIT = 5000    # Wait for JS render (ms)
+CATEGORY_ID = 163  # Video cards
+MAX_PAGES = 3
+DELAY_MIN = 4.0    # Longer delays to avoid rate limiting
+DELAY_MAX = 8.0
+PRICE_MIN = 500
+PRICE_MAX = 500000
+MIN_RESULTS = 3
+PAGE_TIMEOUT = 60000   # 60s timeout
+RENDER_WAIT = 8000      # 8s wait for JS render
 
-# Debug output directory (relative to script location)
 DEBUG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "debug")
 
-# Model name -> Avito search query mapping
 QUERY_OVERRIDES = {
     "Titan RTX": "NVIDIA Titan RTX видеокарта",
     "Titan V": "NVIDIA Titan V видеокарта",
@@ -54,7 +54,6 @@ QUERY_OVERRIDES = {
     "Vega 56": "AMD Vega 56 видеокарта",
 }
 
-# Default template and output paths
 DEFAULT_TEMPLATE = os.path.join(os.path.dirname(__file__), "prices_template.json")
 DEFAULT_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "prices.json")
 
@@ -64,7 +63,6 @@ DEFAULT_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "price
 # ---------------------------------------------------------------------------
 
 def percentile(sorted_data, p):
-    """Calculate p-th percentile (0-100) from sorted list."""
     if not sorted_data:
         return 0
     n = len(sorted_data)
@@ -79,15 +77,12 @@ def percentile(sorted_data, p):
 
 
 def calculate_stats(prices):
-    """Calculate market stats from a list of prices."""
     if not prices or len(prices) < MIN_RESULTS:
         return None
-
     sorted_prices = sorted(prices)
     median = percentile(sorted_prices, 50)
     p25 = percentile(sorted_prices, 25)
     p75 = percentile(sorted_prices, 75)
-
     return {
         "average_price": round(median),
         "min_safe_price": round(p25),
@@ -98,197 +93,276 @@ def calculate_stats(prices):
 
 
 # ---------------------------------------------------------------------------
-#  Stealth patches for Playwright
+#  Stealth patches
 # ---------------------------------------------------------------------------
 
 STEALTH_JS = """
-// Remove webdriver flag
 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-
-// Fake plugins (normal browsers have them)
-Object.defineProperty(navigator, 'plugins', {
-    get: () => [1, 2, 3, 4, 5],
-});
-
-// Fake languages
-Object.defineProperty(navigator, 'languages', {
-    get: () => ['ru-RU', 'ru', 'en-US', 'en'],
-});
-
-// Override Chrome object (headless lacks it)
-window.chrome = {
-    runtime: {},
-    loadTimes: function() {},
-    csi: function() {},
-    app: {},
-};
-
-// Override permissions
-const originalQuery = window.navigator.permissions.query;
-window.navigator.permissions.query = (parameters) => (
-    parameters.name === 'notifications' ?
-        Promise.resolve({ state: Notification.permission }) :
-        originalQuery(parameters)
+Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+Object.defineProperty(navigator, 'languages', { get: () => ['ru-RU', 'ru', 'en-US', 'en'] });
+window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){}, app: {} };
+const origQuery = window.navigator.permissions.query;
+window.navigator.permissions.query = (p) => (
+    p.name === 'notifications' ? Promise.resolve({ state: Notification.permission }) : origQuery(p)
 );
-
-// Fake iframe contentWindow (headless detection)
-Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
-    get: function() { return window; }
-});
-
-// Override toString for stealth functions
-const nativeToString = Function.prototype.toString;
-const customFunctions = new Map();
-
-function patchToString(fn, replacement) {
-    customFunctions.set(fn, replacement);
-}
-
-Function.prototype.toString = function() {
-    if (customFunctions.has(this)) {
-        return customFunctions.get(this);
-    }
-    return nativeToString.call(this);
-};
-patchToString(navigator.webdriver.get, 'function get webdriver() { [native code] }');
 """
 
 
 # ---------------------------------------------------------------------------
-#  DOM price extraction via page.evaluate()
+#  Captcha detection
 # ---------------------------------------------------------------------------
 
-EXTRACT_PRICES_JS = """
+DETECT_CAPTCHA_JS = """
+() => {
+    const body = (document.body?.textContent || '').substring(0, 3000);
+    const title = document.title || '';
+    const indicators = [
+        'Доступ ограничен', 'доступ ограничен',
+        'Введите символы', 'введите символы',
+        'Подтвердите что вы не робот', 'подтвердите что вы не робот',
+        'Доступ к ресурсу заблокирован',
+        'Access denied', 'access denied',
+        'cf-challenge', 'captcha', 'hcaptcha', 'recaptcha',
+    ];
+    for (const ind of indicators) {
+        if (body.includes(ind) || title.toLowerCase().includes(ind.toLowerCase())) {
+            return { blocked: true, reason: ind, title };
+        }
+    }
+    if (document.getElementById('cf-challenge-running')) {
+        return { blocked: true, reason: 'Cloudflare challenge', title };
+    }
+    return { blocked: false, reason: null, title };
+}
+"""
+
+
+# ---------------------------------------------------------------------------
+#  DOM price extraction
+# ---------------------------------------------------------------------------
+
+EXTRACT_PRICES_DOM_JS = """
 () => {
     const prices = [];
     const seen = new Set();
 
-    // Strategy 1: data-marker attributes (Avito's React rendering)
-    const priceMarkers = document.querySelectorAll(
-        '[data-marker="item-price"], [data-marker="item-view/item-price"]'
-    );
-    priceMarkers.forEach(el => {
-        const content = el.getAttribute('content');
-        if (content) {
-            const num = parseInt(content, 10);
-            if (!isNaN(num) && num > 0) prices.push(num);
+    function addPrice(n) {
+        if (!isNaN(n) && n > 0 && !seen.has(n)) {
+            seen.add(n);
+            prices.push(n);
         }
-        // Also check meta children
-        const meta = el.querySelector('meta[itemprop="price"], meta[itemProp="price"]');
-        if (meta) {
-            const mc = meta.getAttribute('content');
-            if (mc) {
-                const num = parseInt(mc, 10);
-                if (!isNaN(num) && num > 0) prices.push(num);
-            }
-        }
+    }
+
+    // Strategy 1: data-marker attributes
+    document.querySelectorAll('[data-marker="item-price"], [data-marker="item-view/item-price"]').forEach(el => {
+        const c = el.getAttribute('content');
+        if (c) addPrice(parseInt(c, 10));
+        el.querySelectorAll('meta[itemprop="price"], meta[itemProp="price"]').forEach(m => {
+            const mc = m.getAttribute('content');
+            if (mc) addPrice(parseInt(mc, 10));
+        });
     });
 
-    // Strategy 2: meta itemprop/itemProp="price" directly
-    const metaPrices = document.querySelectorAll(
-        'meta[itemprop="price"], meta[itemProp="price"]'
-    );
-    metaPrices.forEach(el => {
-        const content = el.getAttribute('content');
-        if (content) {
-            const num = parseInt(content, 10);
-            if (!isNaN(num) && num > 0 && !seen.has(num)) {
-                seen.add(num);
-                prices.push(num);
-            }
-        }
+    // Strategy 2: meta itemprop directly
+    document.querySelectorAll('meta[itemprop="price"], meta[itemProp="price"]').forEach(el => {
+        const c = el.getAttribute('content');
+        if (c) addPrice(parseInt(c, 10));
     });
 
-    // Strategy 3: Text-based price extraction from listing cards
-    // Avito renders prices as formatted text in some layouts
-    const priceElements = document.querySelectorAll(
-        '[data-marker="item-price"], [class*="price"], [class*="Price"]'
-    );
-    priceElements.forEach(el => {
+    // Strategy 3: text-based from price elements
+    document.querySelectorAll('[data-marker="item-price"], [class*="price"], [class*="Price"]').forEach(el => {
         const text = el.textContent || '';
-        // Match patterns: "12 345", "12 345 ₽", "12345"
-        const matches = text.match(/(\\d[\\d\\s]*)/g);
-        if (matches) {
-            matches.forEach(m => {
-                const cleaned = m.replace(/\\s/g, '');
-                const num = parseInt(cleaned, 10);
-                if (!isNaN(num) && num > 0 && !seen.has(num)) {
-                    seen.add(num);
-                    prices.push(num);
-                }
-            });
-        }
+        (text.match(/(\\d[\\d\\s]*)/g) || []).forEach(m => {
+            addPrice(parseInt(m.replace(/\\s/g, ''), 10));
+        });
     });
 
-    // Strategy 4: Look for JSON-LD data
-    const ldScripts = document.querySelectorAll('script[type="application/ld+json"]');
-    ldScripts.forEach(script => {
+    // Strategy 4: JSON-LD
+    document.querySelectorAll('script[type="application/ld+json"]').forEach(script => {
         try {
-            const data = JSON.parse(script.textContent);
-            if (data.offers) {
-                const offerList = Array.isArray(data.offers) ? data.offers : [data.offers];
-                offerList.forEach(offer => {
-                    if (offer.price) {
-                        const num = parseInt(offer.price, 10);
-                        if (!isNaN(num) && num > 0 && !seen.has(num)) {
-                            seen.add(num);
-                            prices.push(num);
-                        }
-                    }
-                });
-            }
-        } catch (e) {}
+            const d = JSON.parse(script.textContent);
+            const offers = d.offers ? (Array.isArray(d.offers) ? d.offers : [d.offers]) : [];
+            offers.forEach(o => { if (o.price) addPrice(parseInt(o.price, 10)); });
+        } catch(e) {}
     });
 
     return prices;
 }
 """
 
-DETECT_CAPTCHA_JS = """
+
+# ---------------------------------------------------------------------------
+#  Page content diagnostic
+# ---------------------------------------------------------------------------
+
+DIAGNOSE_PAGE_JS = """
 () => {
-    // Detect if page is a CAPTCHA or block page
-    const title = document.title || '';
-    const bodyText = (document.body?.textContent || '').substring(0, 2000);
+    const info = {};
+    info.title = document.title;
+    info.url = document.location.href;
+    info.bodyLen = document.body ? document.body.innerHTML.length : 0;
 
-    const captchaIndicators = [
-        'Доступ ограничен',
-        'доступ ограничен',
-        'Введите символы',
-        'введите символы',
-        'Подтвердите, что вы не робот',
-        'подтвердите, что вы не робот',
-        'Access denied',
-        'access denied',
-        'cf-challenge',
-        'captcha',
-        'hcaptcha',
-        'recaptcha',
-        'Доступ к ресурсу заблокирован',
-    ];
+    // Count key elements
+    info.itemsWithMarker = document.querySelectorAll('[data-marker]').length;
+    info.itemsWithPrice = document.querySelectorAll('[data-marker*="price"]').length;
+    info.metaPrices = document.querySelectorAll('meta[itemprop="price"], meta[itemProp="price"]').length;
+    info.catalogSerp = document.querySelectorAll('[data-marker="catalog-serp"]').length;
+    info.itemCards = document.querySelectorAll('[data-marker="item"]').length;
+    info.scripts = document.querySelectorAll('script').length;
 
-    for (const indicator of captchaIndicators) {
-        if (bodyText.includes(indicator) || title.includes(indicator)) {
-            return { blocked: true, reason: indicator, title: title };
+    // Check for embedded data
+    info.hasNextData = !!document.getElementById('__NEXT_DATA__');
+    info.hasInitialState = !!window.__INITIAL_STATE__;
+
+    // Body text preview (first 500 chars)
+    info.bodyPreview = (document.body?.textContent || '').substring(0, 500).replace(/\\s+/g, ' ').trim();
+
+    return info;
+}
+"""
+
+
+# ---------------------------------------------------------------------------
+#  Extract prices from intercepted API response
+# ---------------------------------------------------------------------------
+
+def extract_prices_from_api_response(response_body):
+    """Extract prices from Avito API JSON response."""
+    prices = []
+
+    try:
+        if isinstance(response_body, str):
+            data = json.loads(response_body)
+        else:
+            data = response_body
+    except (json.JSONDecodeError, TypeError):
+        return prices
+
+    # Try common Avito API response structures
+    # Structure 1: { result: { items: [{ price: { value: 12345 } }] } }
+    items = []
+
+    if isinstance(data, dict):
+        # Navigate through various possible structures
+        for key in ["result", "data", "items", "catalog"]:
+            if key in data and isinstance(data[key], dict):
+                for subkey in ["items", "list", "results", "catalogItems"]:
+                    if subkey in data[key] and isinstance(data[key][subkey], list):
+                        items = data[key][subkey]
+                        break
+                if items:
+                    break
+            elif key in data and isinstance(data[key], list):
+                items = data[key]
+                break
+
+    if not items and isinstance(data, list):
+        items = data
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+
+        # Try various price field paths
+        price = None
+
+        # Path 1: item.price.value
+        if "price" in item:
+            p = item["price"]
+            if isinstance(p, dict):
+                price = p.get("value") or p.get("amount") or p.get("price")
+            elif isinstance(p, (int, float)):
+                price = p
+
+        # Path 2: item.priceDict.value
+        if not price and "priceDict" in item:
+            pd = item["priceDict"]
+            if isinstance(pd, dict):
+                price = pd.get("value") or pd.get("amount")
+
+        # Path 3: item.salePrice or item.sale_price
+        if not price:
+            for k in ["salePrice", "sale_price", "cost", "amount"]:
+                if k in item:
+                    v = item[k]
+                    if isinstance(v, dict):
+                        price = v.get("value") or v.get("amount")
+                    elif isinstance(v, (int, float)):
+                        price = v
+                    if price:
+                        break
+
+        # Path 4: item.params with price
+        if not price and "params" in item:
+            params = item["params"]
+            if isinstance(params, dict):
+                price = params.get("price") or params.get("cost")
+            elif isinstance(params, list):
+                for param in params:
+                    if isinstance(param, dict) and param.get("key") in ["price", "cost", "Цена"]:
+                        try:
+                            price = int(re.sub(r'[^\d]', '', str(param.get("value", ""))))
+                        except:
+                            pass
+                        if price:
+                            break
+
+        if price and isinstance(price, (int, float)) and PRICE_MIN <= price <= PRICE_MAX:
+            prices.append(int(price))
+
+    return prices
+
+
+# ---------------------------------------------------------------------------
+#  Extract from embedded page data
+# ---------------------------------------------------------------------------
+
+EXTRACT_EMBEDDED_JS = """
+() => {
+    const prices = [];
+
+    // Try __NEXT_DATA__ (Next.js apps)
+    const nextDataEl = document.getElementById('__NEXT_DATA__');
+    if (nextDataEl) {
+        try {
+            const d = JSON.parse(nextDataEl.textContent);
+            const jsonStr = JSON.stringify(d);
+            // Extract all price-like numbers from the JSON
+            const matches = jsonStr.match(/"price"\\s*:\\s*[{"]*?(\\d+)/g) || [];
+            matches.forEach(m => {
+                const num = parseInt(m.replace(/[^0-9]/g, ''), 10);
+                if (num > 0) prices.push(num);
+            });
+        } catch(e) {}
+    }
+
+    // Try window.__INITIAL_STATE__
+    if (window.__INITIAL_STATE__) {
+        try {
+            const jsonStr = JSON.stringify(window.__INITIAL_STATE__);
+            const matches = jsonStr.match(/"price"\\s*:\\s*[{"]*?(\\d+)/g) || [];
+            matches.forEach(m => {
+                const num = parseInt(m.replace(/[^0-9]/g, ''), 10);
+                if (num > 0) prices.push(num);
+            });
+        } catch(e) {}
+    }
+
+    // Try any inline script with search results data
+    document.querySelectorAll('script').forEach(script => {
+        const text = script.textContent || '';
+        if (text.includes('"price"') && text.length < 5000000) {
+            try {
+                const matches = text.match(/"price"\\s*:\\s*[{"]*?(\\d+)/g) || [];
+                matches.forEach(m => {
+                    const num = parseInt(m.replace(/[^0-9]/g, ''), 10);
+                    if (num > 0) prices.push(num);
+                });
+            } catch(e) {}
         }
-    }
+    });
 
-    // Check for Cloudflare challenge page
-    const cfChallenge = document.getElementById('cf-challenge-running');
-    if (cfChallenge) {
-        return { blocked: true, reason: 'Cloudflare challenge', title: title };
-    }
-
-    // Check if we got redirected to a non-search page
-    const hasSearchResults = document.querySelector(
-        '[data-marker="catalog-serp"], [data-marker="item"]'
-    );
-
-    return {
-        blocked: false,
-        reason: null,
-        title: title,
-        hasResults: !!hasSearchResults
-    };
+    return prices;
 }
 """
 
@@ -297,107 +371,68 @@ DETECT_CAPTCHA_JS = """
 #  Debug helpers
 # ---------------------------------------------------------------------------
 
-def save_debug(name, page, html_content, debug_dir, debug=False):
-    """Save debug HTML and screenshot for analysis."""
+def save_debug(name, page, debug_dir, debug=True):
     if not debug:
         return
     os.makedirs(debug_dir, exist_ok=True)
     safe_name = re.sub(r'[^\w]', '_', name)
 
-    # Save HTML
     html_path = os.path.join(debug_dir, f"{safe_name}.html")
     try:
+        html = page.content()
         with open(html_path, "w", encoding="utf-8") as f:
-            f.write(html_content)
-        print(f"  [DEBUG] HTML saved: {html_path}")
+            f.write(html)
     except Exception as e:
-        print(f"  [DEBUG] Failed to save HTML: {e}")
+        print(f"  [DEBUG] Save HTML failed: {e}")
 
-    # Save screenshot
     try:
         ss_path = os.path.join(debug_dir, f"{safe_name}.png")
         page.screenshot(path=ss_path, full_page=False)
-        print(f"  [DEBUG] Screenshot saved: {ss_path}")
     except Exception as e:
-        print(f"  [DEBUG] Failed to save screenshot: {e}")
+        print(f"  [DEBUG] Screenshot failed: {e}")
 
 
 # ---------------------------------------------------------------------------
-#  Fetching with Playwright (stealth mode)
+#  Main fetch with Playwright
 # ---------------------------------------------------------------------------
 
-def create_stealth_browser(playwright):
-    """Launch Chromium with stealth patches."""
-    browser = playwright.chromium.launch(
-        headless=True,
-        args=[
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-blink-features=AutomationControlled",
-            "--disable-features=IsolateOrigins,site-per-process",
-            "--disable-infobars",
-            "--window-size=1920,1080",
-            "--start-maximized",
-        ]
-    )
+def fetch_model_prices(model_name, browser, context, debug=False, debug_dir=DEBUG_DIR):
+    """Fetch prices for a single model using shared browser context."""
+    page = context.new_page()
 
-    context = browser.new_context(
-        user_agent=(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/126.0.0.0 Safari/537.36"
-        ),
-        viewport={"width": 1920, "height": 1080},
-        locale="ru-RU",
-        timezone_id="Europe/Moscow",
-        extra_http_headers={
-            "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Accept": (
-                "text/html,application/xhtml+xml,application/xml;"
-                "q=0.9,image/avif,image/webp,*/*;q=0.8"
-            ),
-            "Sec-Ch-Ua": (
-                '"Not/A)Brand";v="8", "Chromium";v="126", '
-                '"Google Chrome";v="126"'
-            ),
-            "Sec-Ch-Ua-Mobile": "?0",
-            "Sec-Ch-Ua-Platform": '"Windows"',
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Upgrade-Insecure-Requests": "1",
-        },
-        # Emulate a real browser more closely
-        java_script_enabled=True,
-        bypass_csp=True,
-    )
-
-    return browser, context
-
-
-def fetch_with_playwright(model_name, debug=False, debug_dir=DEBUG_DIR):
-    """Fetch Avito search page using Playwright with stealth mode."""
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
-        print("  [ERROR] Playwright not installed. Run: pip install playwright && playwright install chromium")
-        return []
+    # Apply stealth
+    page.add_init_script(STEALTH_JS)
 
     query = QUERY_OVERRIDES.get(model_name, f"{model_name} видеокарта")
-    search_query = query.replace(" ", "+")
+    search_query = urllib.parse.quote(query, safe='+')
 
     all_prices = []
     was_blocked = False
 
-    with sync_playwright() as p:
-        browser, context = create_stealth_browser(p)
-        page = context.new_page()
+    # Intercept API responses
+    api_responses = []
+    def handle_response(response):
+        url = response.url
+        # Avito API endpoints for search results
+        api_patterns = [
+            '/api/', '/web/1/', '/catalog/items',
+            '/catalog/search', '/search/items',
+        ]
+        if any(p in url for p in api_patterns):
+            try:
+                if response.status == 200:
+                    content_type = response.headers.get('content-type', '')
+                    if 'json' in content_type or 'javascript' in content_type:
+                        body = response.text()
+                        api_responses.append(body)
+                        if debug:
+                            print(f"  [DEBUG] API response captured: {url[:100]} ({len(body)} bytes)")
+            except Exception:
+                pass
 
-        # Apply stealth patches before any navigation
-        page.add_init_script(STEALTH_JS)
+    page.on("response", handle_response)
 
+    try:
         for page_num in range(1, MAX_PAGES + 1):
             url = (
                 f"{BASE_URL}"
@@ -408,96 +443,118 @@ def fetch_with_playwright(model_name, debug=False, debug_dir=DEBUG_DIR):
             )
 
             if debug:
-                print(f"  [DEBUG] Fetching page {page_num}: {url}")
+                print(f"  [DEBUG] Navigating to page {page_num}")
 
             try:
-                # Navigate with realistic wait strategy
-                response = page.goto(
-                    url,
-                    wait_until="commit",
-                    timeout=PAGE_TIMEOUT
-                )
+                # Navigate and wait for network to settle
+                page.goto(url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
 
-                # Wait for content to render
+                # Wait for network to be mostly idle
+                try:
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception:
+                    pass  # networkidle can timeout, that's ok
+
+                # Additional render wait
                 page.wait_for_timeout(RENDER_WAIT)
 
-                # Additional wait for dynamic content
-                try:
-                    page.wait_for_selector(
-                        '[data-marker="item-price"], [data-marker="item"], [data-marker="catalog-serp"]',
-                        timeout=8000
-                    )
-                except Exception:
-                    # No search results found - might be blocked or empty
-                    pass
+                # Scroll down to trigger lazy loading
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+                page.wait_for_timeout(2000)
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                page.wait_for_timeout(2000)
 
-                # Check for CAPTCHA/block
+                # Check for CAPTCHA
                 captcha_info = page.evaluate(DETECT_CAPTCHA_JS)
                 if captcha_info.get("blocked"):
-                    print(f"  [BLOCKED] Page is a CAPTCHA/block page: {captcha_info.get('reason')}")
+                    print(f"  [BLOCKED] CAPTCHA/block: {captcha_info.get('reason')}")
                     print(f"  [BLOCKED] Title: {captcha_info.get('title')}")
-
-                    # Save debug info for first blocked attempt
-                    if debug or page_num == 1:
-                        html = page.content()
-                        save_debug(f"BLOCKED_{model_name}", page, html, debug_dir, debug=True)
-
+                    save_debug(f"BLOCKED_{model_name}", page, debug_dir)
                     was_blocked = True
                     break
 
-                if debug:
-                    print(f"  [DEBUG] Page check: hasResults={captcha_info.get('hasResults')}, title={captcha_info.get('title')}")
+                # === METHOD 1: API response interception ===
+                for body in api_responses:
+                    api_prices = extract_prices_from_api_response(body)
+                    if api_prices:
+                        all_prices.extend(api_prices)
+                        if debug:
+                            print(f"  [DEBUG] API method: {len(api_prices)} prices")
 
-                # Extract prices from rendered DOM
-                prices = page.evaluate(EXTRACT_PRICES_JS)
-
-                if debug:
-                    print(f"  [DEBUG] Extracted {len(prices)} raw prices from DOM")
-
-                # Also try HTML regex as fallback
-                if not prices:
-                    html = page.content()
-                    prices = extract_prices_from_html(html)
+                # === METHOD 2: Embedded data extraction ===
+                embedded_prices = page.evaluate(EXTRACT_EMBEDDED_JS)
+                if embedded_prices:
+                    all_prices.extend(embedded_prices)
                     if debug:
-                        print(f"  [DEBUG] Regex fallback: {len(prices)} prices")
+                        print(f"  [DEBUG] Embedded method: {len(embedded_prices)} prices")
 
-                # Save debug for first page of first model
-                if page_num == 1 and debug:
-                    html = page.content()
-                    save_debug(model_name, page, html, debug_dir, debug=True)
-
-                # If no prices and first page, try without category filter
-                if not prices and page_num == 1:
+                # === METHOD 3: DOM extraction ===
+                dom_prices = page.evaluate(EXTRACT_PRICES_DOM_JS)
+                if dom_prices:
+                    all_prices.extend(dom_prices)
                     if debug:
-                        print(f"  [DEBUG] No prices with category, trying without")
+                        print(f"  [DEBUG] DOM method: {len(dom_prices)} prices")
+
+                # === METHOD 4: HTML regex fallback ===
+                if not all_prices:
+                    html = page.content()
+                    regex_prices = extract_prices_from_html(html)
+                    if regex_prices:
+                        all_prices.extend(regex_prices)
+                        if debug:
+                            print(f"  [DEBUG] Regex fallback: {len(regex_prices)} prices")
+
+                # Diagnostic output
+                if debug and not all_prices:
+                    diag = page.evaluate(DIAGNOSE_PAGE_JS)
+                    print(f"  [DIAG] title={diag.get('title')}")
+                    print(f"  [DIAG] url={diag.get('url')}")
+                    print(f"  [DIAG] bodyLen={diag.get('bodyLen')}, scripts={diag.get('scripts')}")
+                    print(f"  [DIAG] data-marker elements={diag.get('itemsWithMarker')}, price={diag.get('itemsWithPrice')}")
+                    print(f"  [DIAG] catalog-serp={diag.get('catalogSerp')}, item cards={diag.get('itemCards')}")
+                    print(f"  [DIAG] __NEXT_DATA__={diag.get('hasNextData')}, __INITIAL_STATE__={diag.get('hasInitialState')}")
+                    print(f"  [DIAG] body preview: {diag.get('bodyPreview', '')[:300]}")
+
+                    save_debug(f"EMPTY_{model_name}_p{page_num}", page, debug_dir)
+
+                if not all_prices and page_num == 1:
+                    # Try without category filter
+                    if debug:
+                        print(f"  [DEBUG] Trying without category filter")
+                    api_responses.clear()
                     url_no_cat = f"{BASE_URL}?q={search_query}&sort=date&p={page_num}"
-                    page.goto(url_no_cat, wait_until="commit", timeout=PAGE_TIMEOUT)
+                    page.goto(url_no_cat, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
+                    try:
+                        page.wait_for_load_state("networkidle", timeout=15000)
+                    except:
+                        pass
                     page.wait_for_timeout(RENDER_WAIT)
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+                    page.wait_for_timeout(2000)
 
-                    captcha_info = page.evaluate(DETECT_CAPTCHA_JS)
-                    if captcha_info.get("blocked"):
-                        print(f"  [BLOCKED] Also blocked without category")
-                        was_blocked = True
-                        break
+                    # Re-try all methods
+                    for body in api_responses:
+                        all_prices.extend(extract_prices_from_api_response(body))
+                    all_prices.extend(page.evaluate(EXTRACT_EMBEDDED_JS) or [])
+                    all_prices.extend(page.evaluate(EXTRACT_PRICES_DOM_JS) or [])
 
-                    prices = page.evaluate(EXTRACT_PRICES_JS)
-                    if not prices:
+                    if not all_prices:
                         html = page.content()
-                        prices = extract_prices_from_html(html)
+                        all_prices.extend(extract_prices_from_html(html))
 
-                if not prices:
+                    if debug and not all_prices:
+                        diag = page.evaluate(DIAGNOSE_PAGE_JS)
+                        print(f"  [DIAG no-cat] body preview: {diag.get('bodyPreview', '')[:300]}")
+                        save_debug(f"EMPTY_NOCAT_{model_name}", page, debug_dir)
+
+                if not all_prices:
                     if debug:
                         print(f"  [DEBUG] No prices on page {page_num}, stopping")
                     break
 
-                # Filter prices
-                filtered = [p for p in prices if PRICE_MIN <= p <= PRICE_MAX]
-                all_prices.extend(filtered)
+                # Clear api_responses for next page
+                api_responses.clear()
 
-                if debug:
-                    print(f"  [DEBUG] Page {page_num}: {len(filtered)} valid prices (of {len(prices)} raw)")
-
-                # Delay between pages
                 if page_num < MAX_PAGES:
                     delay = random.uniform(DELAY_MIN, DELAY_MAX)
                     time.sleep(delay)
@@ -505,24 +562,23 @@ def fetch_with_playwright(model_name, debug=False, debug_dir=DEBUG_DIR):
             except Exception as e:
                 print(f"  [WARN] Page {page_num} error: {e}")
                 if debug:
-                    try:
-                        html = page.content()
-                        save_debug(f"ERROR_{model_name}_p{page_num}", page, html, debug_dir, debug=True)
-                    except:
-                        pass
+                    save_debug(f"ERROR_{model_name}_p{page_num}", page, debug_dir)
                 break
 
-        browser.close()
+    finally:
+        page.close()
+
+    # Deduplicate and filter
+    unique_prices = list(set(p for p in all_prices if PRICE_MIN <= p <= PRICE_MAX))
 
     if was_blocked:
-        print(f"  [BLOCKED] Avito detected automation. Prices may be unavailable from GitHub Actions IPs.")
-        print(f"  [BLOCKED] Consider running parser locally or using a proxy.")
+        print(f"  [BLOCKED] Avito detected automation from this IP.")
 
-    return all_prices
+    return unique_prices
 
 
 # ---------------------------------------------------------------------------
-#  HTML regex price extraction (fallback)
+#  HTML regex fallback
 # ---------------------------------------------------------------------------
 
 PRICE_PATTERNS = [
@@ -530,17 +586,14 @@ PRICE_PATTERNS = [
     re.compile(r'data-marker="item-price"[^>]*content="(\d+)"', re.IGNORECASE),
     re.compile(r'itemprop="price"\s+content="(\d+)"', re.IGNORECASE),
     re.compile(r'itemProp="price"\s+content="(\d+)"', re.IGNORECASE),
-    re.compile(r'data-marker="item-view/item-price"[^>]*content="(\d+)"', re.IGNORECASE),
     re.compile(r'"price"\s*:\s*(\d+)', re.IGNORECASE),
     re.compile(r'"price":\s*"(\d+)"', re.IGNORECASE),
+    re.compile(r'"value"\s*:\s*(\d+),', re.IGNORECASE),
 ]
 
-
 def extract_prices_from_html(html_text):
-    """Extract prices from raw HTML using regex (fallback method)."""
     prices = []
     seen = set()
-
     for pattern in PRICE_PATTERNS:
         for match in pattern.finditer(html_text):
             raw = match.group(1)
@@ -553,61 +606,61 @@ def extract_prices_from_html(html_text):
             seen.add(price)
             if PRICE_MIN <= price <= PRICE_MAX:
                 prices.append(price)
-
     return prices
 
 
 # ---------------------------------------------------------------------------
-#  Main logic
+#  Main
 # ---------------------------------------------------------------------------
 
-def process_model(model_name, debug=False, debug_dir=DEBUG_DIR):
-    """Process a single GPU model: fetch prices, calculate stats."""
-    print(f"  Processing: {model_name}")
-
-    prices = fetch_with_playwright(model_name, debug=debug, debug_dir=debug_dir)
-
-    if not prices:
-        print(f"    NO PRICES FOUND ({model_name})")
-        return None
-
-    # Remove outliers using IQR method
-    sorted_prices = sorted(prices)
-    q1 = percentile(sorted_prices, 25)
-    q3 = percentile(sorted_prices, 75)
-    iqr = q3 - q1
-    lower_bound = q1 - 1.5 * iqr
-    upper_bound = q3 + 1.5 * iqr
-    filtered = [p for p in prices if lower_bound <= p <= upper_bound]
-
-    if len(filtered) < MIN_RESULTS:
-        filtered = prices
-
-    stats = calculate_stats(filtered)
-    if stats:
-        print(f"    OK: median={stats['average_price']:,} | "
-              f"range={stats['min_safe_price']:,}-{stats['max_fair_price']:,} | "
-              f"scam<{stats['scam_threshold']:,} | "
-              f"n={stats['sample_size']}")
-    return stats
+def create_stealth_browser(playwright):
+    browser = playwright.chromium.launch(
+        headless=True,
+        args=[
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-blink-features=AutomationControlled",
+            "--disable-features=IsolateOrigins,site-per-process",
+            "--disable-infobars",
+            "--window-size=1920,1080",
+        ]
+    )
+    context = browser.new_context(
+        user_agent=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/126.0.0.0 Safari/537.36"
+        ),
+        viewport={"width": 1920, "height": 1080},
+        locale="ru-RU",
+        timezone_id="Europe/Moscow",
+        extra_http_headers={
+            "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Sec-Ch-Ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+        },
+        java_script_enabled=True,
+        bypass_csp=True,
+    )
+    return browser, context
 
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Avito GPU Price Fetcher (Stealth)")
-    parser.add_argument("--template", default=DEFAULT_TEMPLATE,
-                        help="Path to prices_template.json")
-    parser.add_argument("--output", default=DEFAULT_OUTPUT,
-                        help="Path to output prices.json")
-    parser.add_argument("--debug", action="store_true",
-                        help="Verbose output + save HTML/screenshots")
-    parser.add_argument("--model", type=str, default=None,
-                        help="Process only this model (for testing)")
-    parser.add_argument("--limit", type=int, default=None,
-                        help="Limit number of models (for testing)")
+    parser = argparse.ArgumentParser(description="Avito GPU Price Fetcher (Stealth v3)")
+    parser.add_argument("--template", default=DEFAULT_TEMPLATE)
+    parser.add_argument("--output", default=DEFAULT_OUTPUT)
+    parser.add_argument("--debug", action="store_true", default=True)
+    parser.add_argument("--no-debug", action="store_true", help="Disable debug output")
+    parser.add_argument("--model", type=str, default=None)
+    parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
 
-    # Load template
+    debug = args.debug and not args.no_debug
+
     template_path = Path(args.template)
     if not template_path.exists():
         print(f"[ERROR] Template not found: {template_path}")
@@ -629,37 +682,66 @@ def main():
         print(f"[INFO] Limited to first {args.limit} models")
 
     print(f"[INFO] Fetching prices for {len(models)} models")
-    print(f"[INFO] Method: Playwright + Stealth")
+    print(f"[INFO] Method: Playwright + Stealth + API interception")
     print(f"[INFO] Output: {args.output}")
-    if args.debug:
-        print(f"[INFO] Debug dir: {DEBUG_DIR}")
     print()
 
     results = []
     failed = []
 
-    for i, model in enumerate(models):
-        print(f"[{i+1}/{len(models)}] {model}")
-        stats = process_model(model, debug=args.debug)
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("[ERROR] Playwright not installed. Run: pip install playwright && playwright install chromium")
+        sys.exit(1)
 
-        if stats:
-            results.append({
-                "model": model,
-                "average_price": stats["average_price"],
-                "min_safe_price": stats["min_safe_price"],
-                "max_fair_price": stats["max_fair_price"],
-                "scam_threshold": stats["scam_threshold"],
-                "sample_size": stats["sample_size"],
-            })
-        else:
-            failed.append(model)
+    with sync_playwright() as p:
+        browser, context = create_stealth_browser(p)
 
-        # Delay between models
-        if i < len(models) - 1:
-            delay = random.uniform(DELAY_MIN, DELAY_MAX)
-            time.sleep(delay)
+        for i, model in enumerate(models):
+            print(f"[{i+1}/{len(models)}] {model}")
 
-    # Build output JSON
+            prices = fetch_model_prices(model, browser, context, debug=debug)
+
+            if not prices:
+                print(f"    NO PRICES FOUND ({model})")
+                failed.append(model)
+            else:
+                # IQR outlier removal
+                sorted_prices = sorted(prices)
+                q1 = percentile(sorted_prices, 25)
+                q3 = percentile(sorted_prices, 75)
+                iqr = q3 - q1
+                lower = q1 - 1.5 * iqr
+                upper = q3 + 1.5 * iqr
+                filtered = [pr for pr in prices if lower <= pr <= upper]
+                if len(filtered) < MIN_RESULTS:
+                    filtered = prices
+
+                stats = calculate_stats(filtered)
+                if stats:
+                    results.append({
+                        "model": model,
+                        "average_price": stats["average_price"],
+                        "min_safe_price": stats["min_safe_price"],
+                        "max_fair_price": stats["max_fair_price"],
+                        "scam_threshold": stats["scam_threshold"],
+                        "sample_size": stats["sample_size"],
+                    })
+                    print(f"    OK: median={stats['average_price']:,} | "
+                          f"range={stats['min_safe_price']:,}-{stats['max_fair_price']:,} | "
+                          f"scam<{stats['scam_threshold']:,} | n={stats['sample_size']}")
+                else:
+                    failed.append(model)
+
+            if i < len(models) - 1:
+                delay = random.uniform(DELAY_MIN, DELAY_MAX)
+                time.sleep(delay)
+
+        context.close()
+        browser.close()
+
+    # Build output
     now = datetime.now(timezone.utc)
     output = {
         "version": template.get("version", 1),
@@ -671,7 +753,6 @@ def main():
         "prices": results,
     }
 
-    # Write output
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
@@ -680,9 +761,9 @@ def main():
     print()
     print(f"[DONE] Parsed: {len(results)}/{len(models)} models")
     if failed:
-        print(f"[WARN] Failed models ({len(failed)}):")
-        for m in failed:
-            print(f"  - {m}")
+        print(f"[WARN] Failed ({len(failed)}): {', '.join(failed[:10])}")
+        if len(failed) > 10:
+            print(f"  ... and {len(failed) - 10} more")
     print(f"[DONE] Output: {output_path}")
 
 
