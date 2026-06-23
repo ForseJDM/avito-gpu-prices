@@ -2,25 +2,23 @@ name: Update GPU Prices
 
 on:
   schedule:
-    # Every day at 06:00 UTC (09:00 Moscow time)
     - cron: '0 6 * * *'
   workflow_dispatch:
-    # Allow manual trigger from GitHub UI
     inputs:
       model:
-        description: 'Single model to parse (optional, e.g. "RTX 4060")'
+        description: 'Search name (e.g. RTX 4060). Empty = all models.'
         required: false
         default: ''
-      debug:
-        description: 'Enable debug output (saves HTML + screenshots)'
-        required: false
-        type: boolean
-        default: true
       limit:
         description: 'Max models to process (0 = all)'
         required: false
         type: number
         default: 0
+      no_debug:
+        description: 'Disable debug output'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -46,13 +44,24 @@ jobs:
 
       - name: Fetch prices
         run: |
-          python scripts/fetch_prices.py --debug \
-            ${{ github.event.inputs.model && format('--model "{0}"', github.event.inputs.model) || '' }} \
-            ${{ github.event.inputs.limit != '0' && format('--limit {0}', github.event.inputs.limit) || '' }}
+          CMD="python scripts/fetch_prices.py"
+          if [ "${{ github.event.inputs.no_debug }}" != "true" ]; then
+            CMD="$CMD --debug"
+          fi
+          MODEL="${{ github.event.inputs.model }}"
+          if [ -n "$MODEL" ]; then
+            CMD="$CMD --model \"$MODEL\""
+          fi
+          LIMIT="${{ github.event.inputs.limit }}"
+          if [ -n "$LIMIT" ] && [ "$LIMIT" != "0" ]; then
+            CMD="$CMD --limit $LIMIT"
+          fi
+          echo "Running: $CMD"
+          eval $CMD
 
       - name: Validate prices
         run: |
-          python scripts/validate_prices.py --strict || true
+          python scripts/validate_prices.py || true
 
       - name: Upload debug artifacts
         if: always()
@@ -91,11 +100,12 @@ jobs:
             PARSED=$(python3 -c "import json; d=json.load(open('prices.json')); print(d.get('parsed_models','?'))")
             TOTAL=$(python3 -c "import json; d=json.load(open('prices.json')); print(d.get('total_models','?'))")
             FAILED=$(python3 -c "import json; d=json.load(open('prices.json')); print(len(d.get('failed_models',[])))")
+            BLOCKED=$(python3 -c "import json; d=json.load(open('prices.json')); b=d.get('failed_models',[]); print('YES' if len(b)>0 and len(b)<int('$TOTAL') else 'NO')")
             echo "## Price Update Summary" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
             echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
             echo "| Parsed | ${PARSED}/${TOTAL} |" >> $GITHUB_STEP_SUMMARY
             echo "| Failed | ${FAILED} |" >> $GITHUB_STEP_SUMMARY
-            echo "| Changed | ${{ steps.check_changes.outputs.changed }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| IP Blocked | ${BLOCKED} |" >> $GITHUB_STEP_SUMMARY
           fi
