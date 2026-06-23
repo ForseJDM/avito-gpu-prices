@@ -1,10 +1,16 @@
 {
   "version": 1,
-  "updated_at": "2026-06-23T19:51:45.323926+00:00",
+  "updated_at": "2026-06-23T20:03:59.659822+00:00",
   "update_interval_hours": 24,
-  "total_models": 1,
-  "parsed_models": 1,
-  "failed_models": [],
+  "total_models": 99,
+  "parsed_models": 2,
+  "coverage_percent": 2.0,
+  "failed_models": [
+    "NVIDIA GeForce RTX 5080",
+    "NVIDIA GeForce RTX 5070 Ti",
+    "NVIDIA GeForce RTX 5070",
+    "NVIDIA GeForce RTX 5060 Ti"
+  ],
   "prices": [
     {
       "model": "NVIDIA GeForce RTX 4060",
@@ -13,6 +19,14 @@
       "max_fair_price": 23745,
       "scam_threshold": 8800,
       "sample_size": 23
+    },
+    {
+      "model": "NVIDIA GeForce RTX 5090",
+      "average_price": 290000,
+      "min_safe_price": 72000,
+      "max_fair_price": 329900,
+      "scam_threshold": 116000,
+      "sample_size": 33
     }
   ]
 }
