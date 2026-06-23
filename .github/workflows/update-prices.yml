@@ -12,10 +12,15 @@ on:
         required: false
         default: ''
       debug:
-        description: 'Enable debug output'
+        description: 'Enable debug output (saves HTML + screenshots)'
         required: false
         type: boolean
-        default: false
+        default: true
+      limit:
+        description: 'Max models to process (0 = all)'
+        required: false
+        type: number
+        default: 0
 
 permissions:
   contents: write
@@ -23,7 +28,7 @@ permissions:
 jobs:
   update-prices:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
@@ -41,18 +46,28 @@ jobs:
 
       - name: Fetch prices
         run: |
-          ARGS=""
+          ARGS="--debug"
           if [ -n "${{ github.event.inputs.model }}" ]; then
             ARGS="$ARGS --model '${{ github.event.inputs.model }}'"
           fi
-          if [ "${{ github.event.inputs.debug }}" = "true" ]; then
-            ARGS="$ARGS --debug"
+          LIMIT="${{ github.event.inputs.limit }}"
+          if [ -n "$LIMIT" ] && [ "$LIMIT" != "0" ]; then
+            ARGS="$ARGS --limit $LIMIT"
           fi
           python scripts/fetch_prices.py $ARGS
 
       - name: Validate prices
         run: |
           python scripts/validate_prices.py --strict || true
+
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-output
+          path: debug/
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Check for changes
         id: check_changes
@@ -70,7 +85,9 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add prices.json
           TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M UTC')
-          git commit -m "auto: update prices ($TIMESTAMP)"
+          PARSED=$(python3 -c "import json; d=json.load(open('prices.json')); print(d.get('parsed_models','?'))")
+          TOTAL=$(python3 -c "import json; d=json.load(open('prices.json')); print(d.get('total_models','?'))")
+          git commit -m "auto: update prices ($PARSED/$TOTAL) ($TIMESTAMP)"
           git push
 
       - name: Summary
