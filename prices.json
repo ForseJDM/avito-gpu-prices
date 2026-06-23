@@ -1,18 +1,18 @@
 {
   "version": 1,
-  "updated_at": "2026-06-23T19:37:51.567568+00:00",
+  "updated_at": "2026-06-23T19:51:45.323926+00:00",
   "update_interval_hours": 24,
   "total_models": 1,
   "parsed_models": 1,
   "failed_models": [],
   "prices": [
     {
-      "model": "RTX 4060",
-      "average_price": 22750,
-      "min_safe_price": 20869,
-      "max_fair_price": 24949,
-      "scam_threshold": 9100,
-      "sample_size": 34
+      "model": "NVIDIA GeForce RTX 4060",
+      "average_price": 21999,
+      "min_safe_price": 20663,
+      "max_fair_price": 23745,
+      "scam_threshold": 8800,
+      "sample_size": 23
     }
   ]
 }
