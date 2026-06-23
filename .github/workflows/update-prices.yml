@@ -2,20 +2,21 @@ name: Update GPU Prices
 
 on:
   schedule:
-    - cron: '0 6 * * *'
+    # Every 4 hours: 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC
+    - cron: '0 0/4 * * *'
   workflow_dispatch:
     inputs:
       model:
-        description: 'Search name (e.g. RTX 4060). Empty = all models.'
+        description: 'Search name (e.g. RTX 4060). Empty = continue from cursor.'
         required: false
         default: ''
       limit:
-        description: 'Max models to process (0 = all)'
+        description: 'Max models this run (0 = auto)'
         required: false
         type: number
         default: 0
-      no_debug:
-        description: 'Disable debug output'
+      force:
+        description: 'Re-parse all models (ignore existing prices)'
         required: false
         type: boolean
         default: false
@@ -26,7 +27,7 @@ permissions:
 jobs:
   update-prices:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -42,12 +43,9 @@ jobs:
           pip install --quiet playwright
           playwright install chromium --with-deps
 
-      - name: Fetch prices
+      - name: Fetch prices (incremental)
         run: |
-          CMD="python scripts/fetch_prices.py"
-          if [ "${{ github.event.inputs.no_debug }}" != "true" ]; then
-            CMD="$CMD --debug"
-          fi
+          CMD="python scripts/fetch_prices.py --debug"
           MODEL="${{ github.event.inputs.model }}"
           if [ -n "$MODEL" ]; then
             CMD="$CMD --model \"$MODEL\""
@@ -55,6 +53,9 @@ jobs:
           LIMIT="${{ github.event.inputs.limit }}"
           if [ -n "$LIMIT" ] && [ "$LIMIT" != "0" ]; then
             CMD="$CMD --limit $LIMIT"
+          fi
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            CMD="$CMD --force"
           fi
           echo "Running: $CMD"
           eval $CMD
@@ -69,7 +70,7 @@ jobs:
         with:
           name: debug-output
           path: debug/
-          retention-days: 7
+          retention-days: 3
           if-no-files-found: ignore
 
       - name: Check for changes
@@ -90,7 +91,8 @@ jobs:
           TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M UTC')
           PARSED=$(python3 -c "import json; d=json.load(open('prices.json')); print(d.get('parsed_models','?'))")
           TOTAL=$(python3 -c "import json; d=json.load(open('prices.json')); print(d.get('total_models','?'))")
-          git commit -m "auto: update prices ($PARSED/$TOTAL) ($TIMESTAMP)"
+          COV=$(python3 -c "import json; d=json.load(open('prices.json')); print(d.get('coverage_percent','?'))")
+          git commit -m "auto: prices $PARSED/$TOTAL ($COV%) ($TIMESTAMP)"
           git push
 
       - name: Summary
@@ -99,13 +101,12 @@ jobs:
           if [ -f prices.json ]; then
             PARSED=$(python3 -c "import json; d=json.load(open('prices.json')); print(d.get('parsed_models','?'))")
             TOTAL=$(python3 -c "import json; d=json.load(open('prices.json')); print(d.get('total_models','?'))")
+            COV=$(python3 -c "import json; d=json.load(open('prices.json')); print(d.get('coverage_percent','?'))")
             FAILED=$(python3 -c "import json; d=json.load(open('prices.json')); print(len(d.get('failed_models',[])))")
-            BLOCKED=$(python3 -c "import json; d=json.load(open('prices.json')); b=d.get('failed_models',[]); print('YES' if len(b)>0 and len(b)<int('$TOTAL') else 'NO')")
             echo "## Price Update Summary" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
             echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-            echo "| Parsed | ${PARSED}/${TOTAL} |" >> $GITHUB_STEP_SUMMARY
-            echo "| Failed | ${FAILED} |" >> $GITHUB_STEP_SUMMARY
-            echo "| IP Blocked | ${BLOCKED} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Coverage | ${PARSED}/${TOTAL} (${COV}%) |" >> $GITHUB_STEP_SUMMARY
+            echo "| Failed this run | ${FAILED} |" >> $GITHUB_STEP_SUMMARY
           fi
