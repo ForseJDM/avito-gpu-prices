@@ -32,20 +32,17 @@ from datetime import datetime, timezone
 
 BASE_URL = "https://www.avito.ru/rossiya"
 CATEGORY_ID = 163
-MAX_PAGES = 1          # Only 1 page per model (Avito bans after ~2 requests)
-DELAY_MIN = 6.0        # Delay between models
+MAX_PAGES = 1
+DELAY_MIN = 6.0
 DELAY_MAX = 12.0
-PRICE_MIN = 1000       # Absolute minimum price (rubles)
-PRICE_MAX = 500000     # Absolute maximum price (rubles)
+PRICE_MIN = 1000
+PRICE_MAX = 500000
 MIN_RESULTS = 3
-# Dynamic filtering: after IQR, remove prices below this fraction of median
-# This catches accessories mixed into GPU search results
-MIN_PRICE_FRACTION = 0.30  # Price < 30% of median = likely not a GPU
+MIN_PRICE_FRACTION = 0.30
 PAGE_TIMEOUT = 60000
 RENDER_WAIT = 8000
 
 DEBUG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "debug")
-
 DEFAULT_TEMPLATE = os.path.join(os.path.dirname(__file__), "prices_template.json")
 DEFAULT_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "prices.json")
 
@@ -257,7 +254,6 @@ def create_browser(playwright):
 # ---------------------------------------------------------------------------
 
 def fetch_model(search_name, full_name, context, debug=False, debug_dir=DEBUG_DIR):
-    """Fetch prices for one model. Returns (full_name, prices, was_blocked)."""
     page = context.new_page()
     page.add_init_script(STEALTH_JS)
 
@@ -278,13 +274,11 @@ def fetch_model(search_name, full_name, context, debug=False, debug_dir=DEBUG_DI
             except: pass
             page.wait_for_timeout(RENDER_WAIT)
 
-            # Scroll
             page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
             page.wait_for_timeout(1500)
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             page.wait_for_timeout(1500)
 
-            # CAPTCHA check
             captcha = page.evaluate(DETECT_CAPTCHA_JS)
             if captcha.get("blocked"):
                 print(f"  [BLOCKED] {captcha.get('reason')}")
@@ -292,21 +286,18 @@ def fetch_model(search_name, full_name, context, debug=False, debug_dir=DEBUG_DI
                 was_blocked = True
                 return full_name, [], True
 
-            # Method 1: Embedded
             embedded = page.evaluate(EXTRACT_EMBEDDED_JS) or []
             if embedded:
                 all_prices.extend(embedded)
                 if debug:
                     print(f"  [DEBUG] Embedded: {len(embedded)} prices")
 
-            # Method 2: DOM
             dom = page.evaluate(EXTRACT_DOM_JS) or []
             if dom:
                 all_prices.extend(dom)
                 if debug:
                     print(f"  [DEBUG] DOM: {len(dom)} prices")
 
-            # Method 3: Regex fallback
             if not all_prices:
                 html = page.content()
                 regex_prices = extract_prices_from_html(html)
@@ -315,7 +306,6 @@ def fetch_model(search_name, full_name, context, debug=False, debug_dir=DEBUG_DI
                     if debug:
                         print(f"  [DEBUG] Regex: {len(regex_prices)} prices")
 
-            # If nothing found, try without category
             if not all_prices:
                 if debug:
                     print(f"  [DEBUG] No prices with category, trying without")
@@ -354,7 +344,6 @@ def fetch_model(search_name, full_name, context, debug=False, debug_dir=DEBUG_DI
 # ---------------------------------------------------------------------------
 
 def load_existing_prices(output_path):
-    """Load existing prices.json, return dict of model->price_entry."""
     existing = {}
     if not output_path.exists():
         return existing
@@ -370,8 +359,6 @@ def load_existing_prices(output_path):
 
 
 def save_prices(output_path, existing, new_entries, template, failed_models):
-    """Merge new entries into existing and save."""
-    # Update existing with new data
     for entry in new_entries:
         existing[entry["model"]] = entry
 
@@ -415,7 +402,6 @@ def main():
     args = parser.parse_args()
     debug = args.debug and not args.no_debug
 
-    # Load template
     template_path = Path(args.template)
     if not template_path.exists():
         print(f"[ERROR] Template not found: {template_path}")
@@ -429,7 +415,6 @@ def main():
         print("[ERROR] No models in template")
         sys.exit(1)
 
-    # Build model list
     models = []
     for m in raw_models:
         if isinstance(m, dict):
@@ -437,18 +422,15 @@ def main():
         else:
             models.append((m, m))
 
-    # Filter by --model
     if args.model:
         models = [(s, f) for s, f in models if s == args.model or f == args.model]
         if not models:
             print(f"[ERROR] Model '{args.model}' not in template")
             sys.exit(1)
 
-    # Load existing prices
     output_path = Path(args.output)
     existing = {} if args.force else load_existing_prices(output_path)
 
-    # Skip already-parsed models (unless --force)
     if not args.force and not args.model:
         remaining = [(s, f) for s, f in models if f not in existing]
         already = len(models) - len(remaining)
@@ -502,7 +484,6 @@ def main():
                 print(f"    NO PRICES ({full_name})")
                 failed.append(full_name)
             else:
-                # Step 1: IQR outlier removal
                 sp = sorted(prices)
                 q1 = percentile(sp, 25)
                 q3 = percentile(sp, 75)
@@ -511,9 +492,6 @@ def main():
                 if len(filtered) < MIN_RESULTS:
                     filtered = prices
 
-                # Step 2: Dynamic fraction filter
-                # Remove prices below MIN_PRICE_FRACTION of median
-                # This catches accessories (water blocks, fans) mixed into GPU results
                 if len(filtered) >= MIN_RESULTS:
                     med = percentile(sorted(filtered), 50)
                     dynamic_min = med * MIN_PRICE_FRACTION
@@ -540,7 +518,6 @@ def main():
                 else:
                     failed.append(full_name)
 
-            # Delay between models
             if i < len(models) - 1 and not global_blocked:
                 delay = random.uniform(DELAY_MIN, DELAY_MAX)
                 if debug:
@@ -550,7 +527,6 @@ def main():
         context.close()
         browser.close()
 
-    # Merge and save
     output = save_prices(output_path, existing, new_entries, template, failed)
 
     print()
