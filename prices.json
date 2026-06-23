@@ -1,13 +1,18 @@
 {
   "version": 1,
-  "updated_at": "2026-06-23T19:10:47.765363+00:00",
+  "updated_at": "2026-06-23T19:37:51.567568+00:00",
   "update_interval_hours": 24,
-  "total_models": 3,
-  "parsed_models": 0,
-  "failed_models": [
-    "RTX 5090",
-    "RTX 5080",
-    "RTX 5070 Ti"
-  ],
-  "prices": []
+  "total_models": 1,
+  "parsed_models": 1,
+  "failed_models": [],
+  "prices": [
+    {
+      "model": "RTX 4060",
+      "average_price": 22750,
+      "min_safe_price": 20869,
+      "max_fair_price": 24949,
+      "scam_threshold": 9100,
+      "sample_size": 34
+    }
+  ]
 }
