@@ -1,0 +1,90 @@
+name: Update GPU Prices
+
+on:
+  schedule:
+    # Every day at 06:00 UTC (09:00 Moscow time)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    # Allow manual trigger from GitHub UI
+    inputs:
+      model:
+        description: 'Single model to parse (optional, e.g. "RTX 4060")'
+        required: false
+        default: ''
+      debug:
+        description: 'Enable debug output'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  update-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --quiet playwright
+          playwright install chromium --with-deps
+
+      - name: Fetch prices
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.model }}" ]; then
+            ARGS="$ARGS --model '${{ github.event.inputs.model }}'"
+          fi
+          if [ "${{ github.event.inputs.debug }}" = "true" ]; then
+            ARGS="$ARGS --debug"
+          fi
+          python scripts/fetch_prices.py $ARGS
+
+      - name: Validate prices
+        run: |
+          python scripts/validate_prices.py --strict || true
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if git diff --quiet prices.json; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prices.json
+          TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M UTC')
+          git commit -m "auto: update prices ($TIMESTAMP)"
+          git push
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f prices.json ]; then
+            PARSED=$(python3 -c "import json; d=json.load(open('prices.json')); print(d.get('parsed_models','?'))")
+            TOTAL=$(python3 -c "import json; d=json.load(open('prices.json')); print(d.get('total_models','?'))")
+            FAILED=$(python3 -c "import json; d=json.load(open('prices.json')); print(len(d.get('failed_models',[])))")
+            echo "## Price Update Summary" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Parsed | ${PARSED}/${TOTAL} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Failed | ${FAILED} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Changed | ${{ steps.check_changes.outputs.changed }} |" >> $GITHUB_STEP_SUMMARY
+          fi
