@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 """
-Avito GPU Price Fetcher v2.1.1 (rev4)
-Scrapes Avito search results for each GPU model, extracts prices,
-calculates median and percentiles, outputs prices.json.
+Avito GPU Price Fetcher v2.1.1 (rev5 - Incremental)
 
 Strategy:
-  1. PRIMARY: Extract embedded JSON from page scripts
-  2. SECONDARY: DOM-based extraction from rendered elements
-  3. FALLBACK: HTML regex
-
-Uses full model names from template to match gpu-market-db.js.
-Limits to 2 pages per model (Avito IP-bans after ~6 requests).
+  - Reads existing prices.json (if any) and skips already-parsed models
+  - Parses 1 page per model (Avito bans IP after ~2 page loads)
+  - Merges new results into existing prices.json
+  - Each run adds a few models; over multiple runs, all get covered
+  - Schedule workflow every 4 hours for gradual coverage
 
 Usage:
     python fetch_prices.py [--template TEMPLATE] [--output OUTPUT] [--debug]
+    python fetch_prices.py --model "RTX 4060"  # single model
+    python fetch_prices.py --force             # re-parse all (ignore existing)
 """
 
 import json
@@ -33,11 +32,9 @@ from datetime import datetime, timezone
 
 BASE_URL = "https://www.avito.ru/rossiya"
 CATEGORY_ID = 163
-MAX_PAGES = 2          # Avito IP-bans on page 3, so max 2 pages
-DELAY_MIN = 6.0        # 6-12 sec between models (slower = less bans)
+MAX_PAGES = 1          # Only 1 page per model (Avito bans after ~2 requests)
+DELAY_MIN = 6.0        # Delay between models
 DELAY_MAX = 12.0
-PAGE_DELAY_MIN = 3.0   # 3-6 sec between pages
-PAGE_DELAY_MAX = 6.0
 PRICE_MIN = 500
 PRICE_MAX = 500000
 MIN_RESULTS = 3
@@ -95,7 +92,7 @@ window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){}, app: 
 
 
 # ---------------------------------------------------------------------------
-#  JS: Captcha detection
+#  JS helpers
 # ---------------------------------------------------------------------------
 
 DETECT_CAPTCHA_JS = """
@@ -106,7 +103,7 @@ DETECT_CAPTCHA_JS = """
         'Доступ ограничен', 'доступ ограничен',
         'Доступ к ресурсу заблокирован',
         'Подтвердите что вы не робот',
-        'Access denied', 'captcha',
+        'Access denied',
     ];
     for (const ind of indicators) {
         if (body.includes(ind) || title.toLowerCase().includes(ind.toLowerCase())) {
@@ -117,11 +114,6 @@ DETECT_CAPTCHA_JS = """
 }
 """
 
-
-# ---------------------------------------------------------------------------
-#  JS: Embedded data extraction
-# ---------------------------------------------------------------------------
-
 EXTRACT_EMBEDDED_JS = """
 () => {
     const prices = [];
@@ -129,12 +121,10 @@ EXTRACT_EMBEDDED_JS = """
     function addPrice(n) {
         if (!isNaN(n) && n > 0 && !seen.has(n)) { seen.add(n); prices.push(n); }
     }
-    // Inline scripts containing "price"
     document.querySelectorAll('script').forEach(script => {
         const text = script.textContent || '';
         if (text.includes('"price"') && text.length < 5000000) {
             try {
-                // Match "price":{"value":12345} or "price":12345 or "price":"12345"
                 const re = /"price"\\s*:\\s*(?:\\{[^}]*?"value"\\s*:\\s*(\\d+)|"(\\d+)"|(\\d+))/g;
                 let m;
                 while ((m = re.exec(text)) !== null) {
@@ -148,11 +138,6 @@ EXTRACT_EMBEDDED_JS = """
 }
 """
 
-
-# ---------------------------------------------------------------------------
-#  JS: DOM extraction
-# ---------------------------------------------------------------------------
-
 EXTRACT_DOM_JS = """
 () => {
     const prices = [];
@@ -160,7 +145,6 @@ EXTRACT_DOM_JS = """
     function addPrice(n) {
         if (!isNaN(n) && n > 0 && !seen.has(n)) { seen.add(n); prices.push(n); }
     }
-    // data-marker
     document.querySelectorAll('[data-marker="item-price"], [data-marker="item-view/item-price"]').forEach(el => {
         const c = el.getAttribute('content');
         if (c) addPrice(parseInt(c, 10));
@@ -169,12 +153,10 @@ EXTRACT_DOM_JS = """
             if (mc) addPrice(parseInt(mc, 10));
         });
     });
-    // meta directly
     document.querySelectorAll('meta[itemprop="price"], meta[itemProp="price"]').forEach(el => {
         const c = el.getAttribute('content');
         if (c) addPrice(parseInt(c, 10));
     });
-    // JSON-LD
     document.querySelectorAll('script[type="application/ld+json"]').forEach(script => {
         try {
             const d = JSON.parse(script.textContent);
@@ -195,8 +177,8 @@ PRICE_PATTERNS = [
     re.compile(r'"price"\s*:\s*\{[^}]*?"value"\s*:\s*(\d+)', re.IGNORECASE),
     re.compile(r'"price"\s*:\s*"(\d+)"', re.IGNORECASE),
     re.compile(r'"price"\s*:\s*(\d+)', re.IGNORECASE),
-    re.compile(r'content="(\d+)"[^>]*data-marker="item-price"', re.IGNORECASE),
     re.compile(r'data-marker="item-price"[^>]*content="(\d+)"', re.IGNORECASE),
+    re.compile(r'content="(\d+)"[^>]*data-marker="item-price"', re.IGNORECASE),
     re.compile(r'itemprop="price"\s+content="(\d+)"', re.IGNORECASE),
     re.compile(r'itemProp="price"\s+content="(\d+)"', re.IGNORECASE),
 ]
@@ -233,7 +215,7 @@ def save_debug(name, page, debug_dir):
 
 
 # ---------------------------------------------------------------------------
-#  Main fetch
+#  Browser
 # ---------------------------------------------------------------------------
 
 def create_browser(playwright):
@@ -267,8 +249,12 @@ def create_browser(playwright):
     return browser, context
 
 
-def fetch_model(search_name, full_name, browser, context, debug=False, debug_dir=DEBUG_DIR):
-    """Fetch prices for one model. Returns (full_name, prices_list) or (full_name, [])."""
+# ---------------------------------------------------------------------------
+#  Fetch one model
+# ---------------------------------------------------------------------------
+
+def fetch_model(search_name, full_name, context, debug=False, debug_dir=DEBUG_DIR):
+    """Fetch prices for one model. Returns (full_name, prices, was_blocked)."""
     page = context.new_page()
     page.add_init_script(STEALTH_JS)
 
@@ -278,108 +264,151 @@ def fetch_model(search_name, full_name, browser, context, debug=False, debug_dir
     was_blocked = False
 
     try:
-        for page_num in range(1, MAX_PAGES + 1):
-            url = f"{BASE_URL}?q={search_query}&category_id={CATEGORY_ID}&sort=date&p={page_num}"
-            if debug:
-                print(f"  [DEBUG] Page {page_num}: {url}")
+        url = f"{BASE_URL}?q={search_query}&category_id={CATEGORY_ID}&sort=date&p=1"
+        if debug:
+            print(f"  [DEBUG] {url}")
 
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
             try:
-                page.goto(url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
-                try:
-                    page.wait_for_load_state("networkidle", timeout=15000)
+                page.wait_for_load_state("networkidle", timeout=15000)
+            except: pass
+            page.wait_for_timeout(RENDER_WAIT)
+
+            # Scroll
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+            page.wait_for_timeout(1500)
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            page.wait_for_timeout(1500)
+
+            # CAPTCHA check
+            captcha = page.evaluate(DETECT_CAPTCHA_JS)
+            if captcha.get("blocked"):
+                print(f"  [BLOCKED] {captcha.get('reason')}")
+                save_debug(f"BLOCKED_{full_name}", page, debug_dir)
+                was_blocked = True
+                return full_name, [], True
+
+            # Method 1: Embedded
+            embedded = page.evaluate(EXTRACT_EMBEDDED_JS) or []
+            if embedded:
+                all_prices.extend(embedded)
+                if debug:
+                    print(f"  [DEBUG] Embedded: {len(embedded)} prices")
+
+            # Method 2: DOM
+            dom = page.evaluate(EXTRACT_DOM_JS) or []
+            if dom:
+                all_prices.extend(dom)
+                if debug:
+                    print(f"  [DEBUG] DOM: {len(dom)} prices")
+
+            # Method 3: Regex fallback
+            if not all_prices:
+                html = page.content()
+                regex_prices = extract_prices_from_html(html)
+                if regex_prices:
+                    all_prices.extend(regex_prices)
+                    if debug:
+                        print(f"  [DEBUG] Regex: {len(regex_prices)} prices")
+
+            # If nothing found, try without category
+            if not all_prices:
+                if debug:
+                    print(f"  [DEBUG] No prices with category, trying without")
+                url2 = f"{BASE_URL}?q={search_query}&sort=date&p=1"
+                page.goto(url2, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
+                try: page.wait_for_load_state("networkidle", timeout=15000)
                 except: pass
                 page.wait_for_timeout(RENDER_WAIT)
 
-                # Scroll for lazy loading
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
-                page.wait_for_timeout(1500)
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                page.wait_for_timeout(1500)
-
-                # CAPTCHA check
                 captcha = page.evaluate(DETECT_CAPTCHA_JS)
                 if captcha.get("blocked"):
-                    print(f"  [BLOCKED] {captcha.get('reason')} (title: {captcha.get('title')})")
-                    save_debug(f"BLOCKED_{full_name}", page, debug_dir)
+                    print(f"  [BLOCKED] Also blocked without category")
                     was_blocked = True
-                    break
+                    return full_name, [], True
 
-                # Method 1: Embedded data
-                embedded = page.evaluate(EXTRACT_EMBEDDED_JS) or []
-                if embedded:
-                    all_prices.extend(embedded)
-                    if debug:
-                        print(f"  [DEBUG] Embedded: {len(embedded)} prices")
-
-                # Method 2: DOM
-                dom = page.evaluate(EXTRACT_DOM_JS) or []
-                if dom:
-                    all_prices.extend(dom)
-                    if debug:
-                        print(f"  [DEBUG] DOM: {len(dom)} prices")
-
-                # Method 3: HTML regex (only if nothing found)
+                all_prices.extend(page.evaluate(EXTRACT_EMBEDDED_JS) or [])
+                all_prices.extend(page.evaluate(EXTRACT_DOM_JS) or [])
                 if not all_prices:
-                    html = page.content()
-                    regex_prices = extract_prices_from_html(html)
-                    if regex_prices:
-                        all_prices.extend(regex_prices)
-                        if debug:
-                            print(f"  [DEBUG] Regex: {len(regex_prices)} prices")
+                    all_prices.extend(extract_prices_from_html(page.content()))
 
-                # No results on first page? Try without category
-                if not all_prices and page_num == 1:
-                    if debug:
-                        print(f"  [DEBUG] No prices with category, trying without")
-                    url2 = f"{BASE_URL}?q={search_query}&sort=date&p={page_num}"
-                    page.goto(url2, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
-                    try: page.wait_for_load_state("networkidle", timeout=15000)
-                    except: pass
-                    page.wait_for_timeout(RENDER_WAIT)
+                if not all_prices and debug:
+                    save_debug(f"EMPTY_{full_name}", page, debug_dir)
 
-                    captcha = page.evaluate(DETECT_CAPTCHA_JS)
-                    if captcha.get("blocked"):
-                        print(f"  [BLOCKED] Also blocked without category")
-                        was_blocked = True
-                        break
-
-                    all_prices.extend(page.evaluate(EXTRACT_EMBEDDED_JS) or [])
-                    all_prices.extend(page.evaluate(EXTRACT_DOM_JS) or [])
-                    if not all_prices:
-                        all_prices.extend(extract_prices_from_html(page.content()))
-
-                    if not all_prices and debug:
-                        save_debug(f"EMPTY_{full_name}", page, debug_dir)
-
-                if not all_prices:
-                    break
-
-                # Delay between pages
-                if page_num < MAX_PAGES:
-                    time.sleep(random.uniform(PAGE_DELAY_MIN, PAGE_DELAY_MAX))
-
-            except Exception as e:
-                print(f"  [WARN] Page {page_num} error: {e}")
-                break
+        except Exception as e:
+            print(f"  [WARN] Error: {e}")
 
     finally:
         page.close()
 
-    # Deduplicate and filter
     unique = list(set(p for p in all_prices if PRICE_MIN <= p <= PRICE_MAX))
     return full_name, unique, was_blocked
 
 
+# ---------------------------------------------------------------------------
+#  Load/save prices.json with merge
+# ---------------------------------------------------------------------------
+
+def load_existing_prices(output_path):
+    """Load existing prices.json, return dict of model->price_entry."""
+    existing = {}
+    if not output_path.exists():
+        return existing
+    try:
+        with open(output_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for entry in data.get("prices", []):
+            if "model" in entry:
+                existing[entry["model"]] = entry
+    except Exception:
+        pass
+    return existing
+
+
+def save_prices(output_path, existing, new_entries, template, failed_models):
+    """Merge new entries into existing and save."""
+    # Update existing with new data
+    for entry in new_entries:
+        existing[entry["model"]] = entry
+
+    all_prices = sorted(existing.values(), key=lambda e: e.get("model", ""))
+
+    now = datetime.now(timezone.utc)
+    output = {
+        "version": template.get("version", 1),
+        "updated_at": now.isoformat(),
+        "update_interval_hours": template.get("update_interval_hours", 24),
+        "total_models": len(template.get("models", [])),
+        "parsed_models": len(all_prices),
+        "coverage_percent": round(len(all_prices) / max(len(template.get("models", [])), 1) * 100, 1),
+        "failed_models": failed_models,
+        "prices": all_prices,
+    }
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(output, f, ensure_ascii=False, indent=2)
+
+    return output
+
+
+# ---------------------------------------------------------------------------
+#  Main
+# ---------------------------------------------------------------------------
+
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Avito GPU Price Fetcher v2.1.1")
+    parser = argparse.ArgumentParser(description="Avito GPU Price Fetcher v2.1.1 (Incremental)")
     parser.add_argument("--template", default=DEFAULT_TEMPLATE)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
     parser.add_argument("--debug", action="store_true", default=True)
     parser.add_argument("--no-debug", action="store_true")
     parser.add_argument("--model", type=str, default=None,
-                        help="Search name to process (e.g. 'RTX 4060')")
+                        help="Search name (e.g. 'RTX 4060')")
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--force", action="store_true",
+                        help="Re-parse all models (ignore existing)")
     args = parser.parse_args()
     debug = args.debug and not args.no_debug
 
@@ -392,12 +421,12 @@ def main():
     with open(template_path, "r", encoding="utf-8") as f:
         template = json.load(f)
 
-    # Support both old format (array of strings) and new format (array of objects)
     raw_models = template.get("models", [])
     if not raw_models:
         print("[ERROR] No models in template")
         sys.exit(1)
 
+    # Build model list
     models = []
     for m in raw_models:
         if isinstance(m, dict):
@@ -409,17 +438,32 @@ def main():
     if args.model:
         models = [(s, f) for s, f in models if s == args.model or f == args.model]
         if not models:
-            print(f"[ERROR] Model '{args.model}' not found in template")
+            print(f"[ERROR] Model '{args.model}' not in template")
             sys.exit(1)
-        print(f"[INFO] Single model: {models[0][0]} -> {models[0][1]}")
+
+    # Load existing prices
+    output_path = Path(args.output)
+    existing = {} if args.force else load_existing_prices(output_path)
+
+    # Skip already-parsed models (unless --force)
+    if not args.force and not args.model:
+        remaining = [(s, f) for s, f in models if f not in existing]
+        already = len(models) - len(remaining)
+        if already > 0:
+            print(f"[INFO] Skipping {already} already-parsed models")
+        models = remaining
+
+    if not models:
+        print(f"[INFO] All models already parsed! Coverage: {len(existing)}/{len(raw_models)}")
+        print(f"[DONE] No work needed. Output: {output_path}")
+        return
 
     if args.limit:
         models = models[:args.limit]
-        print(f"[INFO] Limited to {args.limit} models")
 
-    print(f"[INFO] Fetching prices for {len(models)} models")
-    print(f"[INFO] Method: Playwright Stealth + Embedded/DOM extraction")
-    print(f"[INFO] Max pages per model: {MAX_PAGES}")
+    print(f"[INFO] Models to parse: {len(models)}")
+    print(f"[INFO] Already parsed: {len(existing)}/{len(raw_models)}")
+    print(f"[INFO] Method: Playwright Stealth (1 page per model)")
     print()
 
     try:
@@ -428,7 +472,7 @@ def main():
         print("[ERROR] pip install playwright && playwright install chromium")
         sys.exit(1)
 
-    results = []
+    new_entries = []
     failed = []
     global_blocked = False
 
@@ -439,12 +483,12 @@ def main():
             print(f"[{i+1}/{len(models)}] {search_name} -> {full_name}")
 
             if global_blocked:
-                print(f"  [SKIP] IP already blocked, skipping remaining models")
+                print(f"  [SKIP] IP blocked, skipping")
                 failed.append(full_name)
                 continue
 
             name, prices, was_blocked = fetch_model(
-                search_name, full_name, browser, context,
+                search_name, full_name, context,
                 debug=debug, debug_dir=DEBUG_DIR
             )
 
@@ -455,7 +499,7 @@ def main():
                 print(f"    NO PRICES ({full_name})")
                 failed.append(full_name)
             else:
-                # IQR filtering
+                # IQR filter
                 sp = sorted(prices)
                 q1 = percentile(sp, 25)
                 q3 = percentile(sp, 75)
@@ -466,7 +510,7 @@ def main():
 
                 stats = calculate_stats(filtered)
                 if stats:
-                    results.append({
+                    new_entries.append({
                         "model": full_name,
                         "average_price": stats["average_price"],
                         "min_safe_price": stats["min_safe_price"],
@@ -484,38 +528,22 @@ def main():
             if i < len(models) - 1 and not global_blocked:
                 delay = random.uniform(DELAY_MIN, DELAY_MAX)
                 if debug:
-                    print(f"  [DELAY] {delay:.1f}s before next model")
+                    print(f"  [DELAY] {delay:.1f}s")
                 time.sleep(delay)
 
         context.close()
         browser.close()
 
-    # Build output
-    now = datetime.now(timezone.utc)
-    output = {
-        "version": template.get("version", 1),
-        "updated_at": now.isoformat(),
-        "update_interval_hours": template.get("update_interval_hours", 24),
-        "total_models": len(models),
-        "parsed_models": len(results),
-        "failed_models": failed,
-        "prices": results,
-    }
-
-    output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(output, f, ensure_ascii=False, indent=2)
+    # Merge and save
+    output = save_prices(output_path, existing, new_entries, template, failed)
 
     print()
-    print(f"[DONE] Parsed: {len(results)}/{len(models)} models")
+    print(f"[DONE] New: {len(new_entries)} | Total: {output['parsed_models']}/{output['total_models']} ({output['coverage_percent']}%)")
     if global_blocked:
-        print(f"[WARN] IP was blocked by Avito. Remaining models skipped.")
-        print(f"[HINT] Run again later, or reduce model count, or use a proxy.")
+        print(f"[WARN] IP blocked by Avito. Some models skipped.")
+        print(f"[HINT] Next run will continue from where we left off.")
     if failed:
-        print(f"[WARN] Failed ({len(failed)}): {', '.join(failed[:5])}")
-        if len(failed) > 5:
-            print(f"  ... and {len(failed) - 5} more")
+        print(f"[WARN] Failed this run ({len(failed)}): {', '.join(failed[:5])}")
     print(f"[DONE] Output: {output_path}")
 
 
