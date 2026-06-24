@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-06-24T07:33:57.237890+00:00",
+  "updated_at": "2026-06-24T10:45:33.963838+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 16,
-  "coverage_percent": 16.2,
+  "parsed_models": 17,
+  "coverage_percent": 17.2,
   "failed_models": [
-    "NVIDIA GeForce RTX 3090",
     "NVIDIA GeForce RTX 3080 Ti",
     "NVIDIA GeForce RTX 3080",
     "NVIDIA GeForce RTX 3070 Ti",
@@ -91,6 +90,14 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "NVIDIA GeForce RTX 3090",
+      "average_price": 83495,
+      "min_safe_price": 78900,
+      "max_fair_price": 89992,
+      "scam_threshold": 33398,
+      "sample_size": 28
+    },
     {
       "model": "NVIDIA GeForce RTX 3090 Ti",
       "average_price": 56500,
