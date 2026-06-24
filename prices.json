@@ -1,15 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-06-24T02:16:50.783404+00:00",
+  "updated_at": "2026-06-24T06:52:02.181826+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 8,
-  "coverage_percent": 8.1,
+  "parsed_models": 12,
+  "coverage_percent": 12.1,
   "failed_models": [
-    "NVIDIA GeForce RTX 4080 SUPER",
-    "NVIDIA GeForce RTX 4080",
-    "NVIDIA GeForce RTX 4070 Ti SUPER",
-    "NVIDIA GeForce RTX 4070 Ti",
     "NVIDIA GeForce RTX 4070 SUPER",
     "NVIDIA GeForce RTX 4070",
     "NVIDIA GeForce RTX 4060 Ti",
@@ -106,6 +102,38 @@
       "max_fair_price": 23745,
       "scam_threshold": 8800,
       "sample_size": 23
+    },
+    {
+      "model": "NVIDIA GeForce RTX 4070 Ti",
+      "average_price": 53500,
+      "min_safe_price": 49000,
+      "max_fair_price": 56990,
+      "scam_threshold": 21400,
+      "sample_size": 37
+    },
+    {
+      "model": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "average_price": 61945,
+      "min_safe_price": 50742,
+      "max_fair_price": 65248,
+      "scam_threshold": 24778,
+      "sample_size": 36
+    },
+    {
+      "model": "NVIDIA GeForce RTX 4080",
+      "average_price": 74650,
+      "min_safe_price": 69998,
+      "max_fair_price": 79992,
+      "scam_threshold": 29860,
+      "sample_size": 32
+    },
+    {
+      "model": "NVIDIA GeForce RTX 4080 SUPER",
+      "average_price": 80000,
+      "min_safe_price": 74990,
+      "max_fair_price": 90000,
+      "scam_threshold": 32000,
+      "sample_size": 29
     },
     {
       "model": "NVIDIA GeForce RTX 4090",
