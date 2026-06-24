@@ -1,14 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-06-24T06:52:02.181826+00:00",
+  "updated_at": "2026-06-24T07:02:30.473945+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 12,
-  "coverage_percent": 12.1,
+  "parsed_models": 15,
+  "coverage_percent": 15.2,
   "failed_models": [
-    "NVIDIA GeForce RTX 4070 SUPER",
-    "NVIDIA GeForce RTX 4070",
-    "NVIDIA GeForce RTX 4060 Ti",
     "NVIDIA GeForce RTX 3090 Ti",
     "NVIDIA GeForce RTX 3090",
     "NVIDIA GeForce RTX 3080 Ti",
@@ -102,6 +99,30 @@
       "max_fair_price": 23745,
       "scam_threshold": 8800,
       "sample_size": 23
+    },
+    {
+      "model": "NVIDIA GeForce RTX 4060 Ti",
+      "average_price": 25990,
+      "min_safe_price": 24490,
+      "max_fair_price": 28000,
+      "scam_threshold": 10396,
+      "sample_size": 29
+    },
+    {
+      "model": "NVIDIA GeForce RTX 4070",
+      "average_price": 39945,
+      "min_safe_price": 37968,
+      "max_fair_price": 45308,
+      "scam_threshold": 15978,
+      "sample_size": 32
+    },
+    {
+      "model": "NVIDIA GeForce RTX 4070 SUPER",
+      "average_price": 45515,
+      "min_safe_price": 43180,
+      "max_fair_price": 48925,
+      "scam_threshold": 18206,
+      "sample_size": 32
     },
     {
       "model": "NVIDIA GeForce RTX 4070 Ti",
