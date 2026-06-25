@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-06-25T02:28:02.332272+00:00",
+  "updated_at": "2026-06-25T10:35:25.585800+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 22,
-  "coverage_percent": 22.2,
+  "parsed_models": 23,
+  "coverage_percent": 23.2,
   "failed_models": [
-    "NVIDIA GeForce RTX 3060",
     "NVIDIA GeForce RTX 3050",
     "NVIDIA GeForce RTX 2080 Ti",
     "NVIDIA GeForce RTX 2080 SUPER",
@@ -85,6 +84,14 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "NVIDIA GeForce RTX 3060",
+      "average_price": 18947,
+      "min_safe_price": 17096,
+      "max_fair_price": 19992,
+      "scam_threshold": 7579,
+      "sample_size": 28
+    },
     {
       "model": "NVIDIA GeForce RTX 3060 Ti",
       "average_price": 19000,
