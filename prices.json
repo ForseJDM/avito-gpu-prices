@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-06-25T19:28:29.832176+00:00",
+  "updated_at": "2026-06-25T21:22:59.783096+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 25,
-  "coverage_percent": 25.3,
+  "parsed_models": 26,
+  "coverage_percent": 26.3,
   "failed_models": [
-    "NVIDIA GeForce RTX 2080 SUPER",
     "NVIDIA GeForce RTX 2080",
     "NVIDIA GeForce RTX 2070 SUPER",
     "NVIDIA GeForce RTX 2070",
@@ -82,6 +81,14 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "NVIDIA GeForce RTX 2080 SUPER",
+      "average_price": 19500,
+      "min_safe_price": 17500,
+      "max_fair_price": 22200,
+      "scam_threshold": 7800,
+      "sample_size": 33
+    },
     {
       "model": "NVIDIA GeForce RTX 2080 Ti",
       "average_price": 23995,
