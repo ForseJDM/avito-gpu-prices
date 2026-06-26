@@ -1,15 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-06-26T11:05:10.333737+00:00",
+  "updated_at": "2026-06-26T14:06:10.165397+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 30,
-  "coverage_percent": 30.3,
+  "parsed_models": 34,
+  "coverage_percent": 34.3,
   "failed_models": [
-    "NVIDIA GeForce RTX 2060",
-    "NVIDIA GeForce GTX 1660 Ti",
-    "NVIDIA GeForce GTX 1660 SUPER",
-    "NVIDIA GeForce GTX 1660",
     "NVIDIA GeForce GTX 1650 SUPER",
     "NVIDIA GeForce GTX 1650",
     "NVIDIA GeForce GTX 1630",
@@ -77,6 +73,38 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "NVIDIA GeForce GTX 1660",
+      "average_price": 8668,
+      "min_safe_price": 6898,
+      "max_fair_price": 9622,
+      "scam_threshold": 3467,
+      "sample_size": 24
+    },
+    {
+      "model": "NVIDIA GeForce GTX 1660 SUPER",
+      "average_price": 8930,
+      "min_safe_price": 8355,
+      "max_fair_price": 9395,
+      "scam_threshold": 3572,
+      "sample_size": 27
+    },
+    {
+      "model": "NVIDIA GeForce GTX 1660 Ti",
+      "average_price": 9900,
+      "min_safe_price": 8500,
+      "max_fair_price": 10899,
+      "scam_threshold": 3960,
+      "sample_size": 29
+    },
+    {
+      "model": "NVIDIA GeForce RTX 2060",
+      "average_price": 12222,
+      "min_safe_price": 10850,
+      "max_fair_price": 13745,
+      "scam_threshold": 4889,
+      "sample_size": 27
+    },
     {
       "model": "NVIDIA GeForce RTX 2060 SUPER",
       "average_price": 14000,
