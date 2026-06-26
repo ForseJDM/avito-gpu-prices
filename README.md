@@ -4,7 +4,7 @@ Auto-updated GPU market prices for [Avito GPU Helper](https://github.com/ForseJD
 
 ## How it works
 
-- **GitHub Actions** runs daily at 06:00 UTC
+- **GitHub Actions** runs every 4 hours (00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC)
 - **Playwright** fetches Avito search results for each GPU model
 - Prices are extracted, filtered (IQR outliers), and aggregated:
   - `average_price` = median
