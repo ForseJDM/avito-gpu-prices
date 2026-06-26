@@ -1,7 +1,7 @@
 # avito-gpu-prices
 
 📌 **Клиентское расширение** для этих данных:**ForseJDM/avito-gpu-helper**
-Auto-updated GPU market prices for [Avito GPU Helper](https://github.com/ForseJDM/avito-gpu-helper) Chrome Extension.
+- Auto-updated GPU market prices for [Avito GPU Helper](https://github.com/ForseJDM/avito-gpu-helper) Chrome Extension.
 
 ## How it works
 
