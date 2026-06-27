@@ -1,14 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-06-27T13:10:21.949568+00:00",
+  "updated_at": "2026-06-27T16:59:25.472271+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 36,
-  "coverage_percent": 36.4,
+  "parsed_models": 39,
+  "coverage_percent": 39.4,
   "failed_models": [
-    "NVIDIA GeForce GTX 1630",
-    "NVIDIA GeForce GTX 1080 Ti",
-    "NVIDIA GeForce GTX 1080",
     "NVIDIA GeForce GTX 1070 Ti",
     "NVIDIA GeForce GTX 1070",
     "NVIDIA GeForce GTX 1060",
@@ -71,6 +68,30 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "NVIDIA GeForce GTX 1080",
+      "average_price": 9800,
+      "min_safe_price": 8200,
+      "max_fair_price": 11020,
+      "scam_threshold": 3920,
+      "sample_size": 31
+    },
+    {
+      "model": "NVIDIA GeForce GTX 1080 Ti",
+      "average_price": 11999,
+      "min_safe_price": 10999,
+      "max_fair_price": 13000,
+      "scam_threshold": 4800,
+      "sample_size": 25
+    },
+    {
+      "model": "NVIDIA GeForce GTX 1630",
+      "average_price": 5600,
+      "min_safe_price": 4350,
+      "max_fair_price": 6896,
+      "scam_threshold": 2240,
+      "sample_size": 26
+    },
     {
       "model": "NVIDIA GeForce GTX 1650",
       "average_price": 5000,
