@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-06-27T06:46:56.855656+00:00",
+  "updated_at": "2026-06-27T09:57:38.104499+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 35,
-  "coverage_percent": 35.4,
+  "parsed_models": 36,
+  "coverage_percent": 36.4,
   "failed_models": [
-    "NVIDIA GeForce GTX 1650",
     "NVIDIA GeForce GTX 1630",
     "NVIDIA GeForce GTX 1080 Ti",
     "NVIDIA GeForce GTX 1080",
@@ -72,6 +71,14 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "NVIDIA GeForce GTX 1650",
+      "average_price": 5000,
+      "min_safe_price": 4600,
+      "max_fair_price": 6000,
+      "scam_threshold": 2000,
+      "sample_size": 25
+    },
     {
       "model": "NVIDIA GeForce GTX 1650 SUPER",
       "average_price": 7000,
