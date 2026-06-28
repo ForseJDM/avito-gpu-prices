@@ -1,13 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-06-28T10:21:53.216002+00:00",
+  "updated_at": "2026-06-28T13:18:39.255595+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 42,
-  "coverage_percent": 42.4,
+  "parsed_models": 44,
+  "coverage_percent": 44.4,
   "failed_models": [
-    "NVIDIA GeForce GTX 1050 Ti",
-    "NVIDIA GeForce GTX 1050",
     "NVIDIA GeForce GTX 980 Ti",
     "NVIDIA GeForce GTX 980",
     "NVIDIA GeForce GTX 970",
@@ -65,6 +63,22 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "NVIDIA GeForce GTX 1050",
+      "average_price": 3000,
+      "min_safe_price": 2421,
+      "max_fair_price": 4150,
+      "scam_threshold": 1200,
+      "sample_size": 35
+    },
+    {
+      "model": "NVIDIA GeForce GTX 1050 Ti",
+      "average_price": 4200,
+      "min_safe_price": 3846,
+      "max_fair_price": 4500,
+      "scam_threshold": 1680,
+      "sample_size": 25
+    },
     {
       "model": "NVIDIA GeForce GTX 1060",
       "average_price": 5000,
