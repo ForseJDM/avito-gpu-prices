@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-06-29T08:51:18.541778+00:00",
+  "updated_at": "2026-06-29T15:31:44.381839+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 45,
-  "coverage_percent": 45.5,
+  "parsed_models": 46,
+  "coverage_percent": 46.5,
   "failed_models": [
-    "NVIDIA GeForce GTX 980",
     "NVIDIA GeForce GTX 970",
     "NVIDIA GeForce GTX 960",
     "NVIDIA GeForce GTX 950",
@@ -165,6 +164,14 @@
       "max_fair_price": 10899,
       "scam_threshold": 3960,
       "sample_size": 29
+    },
+    {
+      "model": "NVIDIA GeForce GTX 980",
+      "average_price": 5654,
+      "min_safe_price": 4300,
+      "max_fair_price": 7550,
+      "scam_threshold": 2261,
+      "sample_size": 32
     },
     {
       "model": "NVIDIA GeForce GTX 980 Ti",
