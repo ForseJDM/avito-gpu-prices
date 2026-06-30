@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-06-30T02:29:34.076496+00:00",
+  "updated_at": "2026-06-30T07:43:28.454659+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 47,
-  "coverage_percent": 47.5,
+  "parsed_models": 48,
+  "coverage_percent": 48.5,
   "failed_models": [
-    "NVIDIA GeForce GTX 960",
     "NVIDIA GeForce GTX 950",
     "NVIDIA GeForce GTX 780 Ti",
     "NVIDIA GeForce GTX 780",
@@ -163,6 +162,14 @@
       "max_fair_price": 10899,
       "scam_threshold": 3960,
       "sample_size": 29
+    },
+    {
+      "model": "NVIDIA GeForce GTX 960",
+      "average_price": 2983,
+      "min_safe_price": 2499,
+      "max_fair_price": 3631,
+      "scam_threshold": 1193,
+      "sample_size": 26
     },
     {
       "model": "NVIDIA GeForce GTX 970",
