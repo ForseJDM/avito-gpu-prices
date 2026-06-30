@@ -1,13 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-06-30T17:48:33.329075+00:00",
+  "updated_at": "2026-06-30T21:24:05.112979+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 52,
-  "coverage_percent": 52.5,
+  "parsed_models": 54,
+  "coverage_percent": 54.5,
   "failed_models": [
-    "NVIDIA GeForce GTX 760",
-    "NVIDIA GeForce GTX 750 Ti",
     "NVIDIA GeForce GTX 750",
     "NVIDIA Titan RTX",
     "NVIDIA Titan V",
@@ -158,6 +156,22 @@
       "max_fair_price": 10899,
       "scam_threshold": 3960,
       "sample_size": 29
+    },
+    {
+      "model": "NVIDIA GeForce GTX 750 Ti",
+      "average_price": 2150,
+      "min_safe_price": 1661,
+      "max_fair_price": 3150,
+      "scam_threshold": 860,
+      "sample_size": 22
+    },
+    {
+      "model": "NVIDIA GeForce GTX 760",
+      "average_price": 2150,
+      "min_safe_price": 1612,
+      "max_fair_price": 2890,
+      "scam_threshold": 860,
+      "sample_size": 22
     },
     {
       "model": "NVIDIA GeForce GTX 770",
