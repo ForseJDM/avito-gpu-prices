@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-01T08:04:56.229995+00:00",
+  "updated_at": "2026-07-01T14:10:13.080584+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 58,
-  "coverage_percent": 58.6,
+  "parsed_models": 59,
+  "coverage_percent": 59.6,
   "failed_models": [
-    "NVIDIA Titan X",
     "AMD Radeon RX 7900 XTX",
     "AMD Radeon RX 7900 XT",
     "AMD Radeon RX 7900 GRE",
@@ -504,6 +503,14 @@
       "max_fair_price": 69080,
       "scam_threshold": 18890,
       "sample_size": 30
+    },
+    {
+      "model": "NVIDIA Titan X",
+      "average_price": 18640,
+      "min_safe_price": 12000,
+      "max_fair_price": 24500,
+      "scam_threshold": 7456,
+      "sample_size": 29
     },
     {
       "model": "NVIDIA Titan Xp",
