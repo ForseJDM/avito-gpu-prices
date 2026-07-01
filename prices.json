@@ -1,13 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-01T14:10:13.080584+00:00",
+  "updated_at": "2026-07-01T17:48:20.590841+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 59,
-  "coverage_percent": 59.6,
+  "parsed_models": 61,
+  "coverage_percent": 61.6,
   "failed_models": [
-    "AMD Radeon RX 7900 XTX",
-    "AMD Radeon RX 7900 XT",
     "AMD Radeon RX 7900 GRE",
     "AMD Radeon RX 7800 XT",
     "AMD Radeon RX 7700 XT",
@@ -48,6 +46,22 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "AMD Radeon RX 7900 XT",
+      "average_price": 54745,
+      "min_safe_price": 47625,
+      "max_fair_price": 62000,
+      "scam_threshold": 21898,
+      "sample_size": 34
+    },
+    {
+      "model": "AMD Radeon RX 7900 XTX",
+      "average_price": 69495,
+      "min_safe_price": 64997,
+      "max_fair_price": 77250,
+      "scam_threshold": 27798,
+      "sample_size": 28
+    },
     {
       "model": "NVIDIA GeForce GTX 1050",
       "average_price": 3000,
