@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-01T17:48:20.590841+00:00",
+  "updated_at": "2026-07-01T21:19:33.242425+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 61,
-  "coverage_percent": 61.6,
+  "parsed_models": 62,
+  "coverage_percent": 62.6,
   "failed_models": [
-    "AMD Radeon RX 7900 GRE",
     "AMD Radeon RX 7800 XT",
     "AMD Radeon RX 7700 XT",
     "AMD Radeon RX 7600 XT",
@@ -46,6 +45,14 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "AMD Radeon RX 7900 GRE",
+      "average_price": 41990,
+      "min_safe_price": 40500,
+      "max_fair_price": 44000,
+      "scam_threshold": 16796,
+      "sample_size": 25
+    },
     {
       "model": "AMD Radeon RX 7900 XT",
       "average_price": 54745,
