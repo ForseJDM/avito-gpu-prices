@@ -1,14 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-06-30T21:24:05.112979+00:00",
+  "updated_at": "2026-07-01T02:37:05.238674+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 54,
-  "coverage_percent": 54.5,
+  "parsed_models": 57,
+  "coverage_percent": 57.6,
   "failed_models": [
-    "NVIDIA GeForce GTX 750",
-    "NVIDIA Titan RTX",
-    "NVIDIA Titan V",
     "NVIDIA Titan Xp",
     "NVIDIA Titan X",
     "AMD Radeon RX 7900 XTX",
@@ -156,6 +153,14 @@
       "max_fair_price": 10899,
       "scam_threshold": 3960,
       "sample_size": 29
+    },
+    {
+      "model": "NVIDIA GeForce GTX 750",
+      "average_price": 1648,
+      "min_safe_price": 1374,
+      "max_fair_price": 1950,
+      "scam_threshold": 659,
+      "sample_size": 19
     },
     {
       "model": "NVIDIA GeForce GTX 750 Ti",
@@ -484,6 +489,22 @@
       "max_fair_price": 349250,
       "scam_threshold": 130800,
       "sample_size": 28
+    },
+    {
+      "model": "NVIDIA Titan RTX",
+      "average_price": 50345,
+      "min_safe_price": 45317,
+      "max_fair_price": 57070,
+      "scam_threshold": 20138,
+      "sample_size": 28
+    },
+    {
+      "model": "NVIDIA Titan V",
+      "average_price": 47224,
+      "min_safe_price": 21375,
+      "max_fair_price": 69080,
+      "scam_threshold": 18890,
+      "sample_size": 30
     }
   ]
 }
