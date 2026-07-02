@@ -1,13 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-02T10:29:56.176854+00:00",
+  "updated_at": "2026-07-02T13:31:41.379266+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 66,
-  "coverage_percent": 66.7,
+  "parsed_models": 68,
+  "coverage_percent": 68.7,
   "failed_models": [
-    "AMD Radeon RX 6950 XT",
-    "AMD Radeon RX 6900 XT",
     "AMD Radeon RX 6800 XT",
     "AMD Radeon RX 6800",
     "AMD Radeon RX 6750 XT",
@@ -41,6 +39,22 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "AMD Radeon RX 6900 XT",
+      "average_price": 35000,
+      "min_safe_price": 32000,
+      "max_fair_price": 38000,
+      "scam_threshold": 14000,
+      "sample_size": 29
+    },
+    {
+      "model": "AMD Radeon RX 6950 XT",
+      "average_price": 44750,
+      "min_safe_price": 39748,
+      "max_fair_price": 51750,
+      "scam_threshold": 17900,
+      "sample_size": 28
+    },
     {
       "model": "AMD Radeon RX 7600",
       "average_price": 19345,
