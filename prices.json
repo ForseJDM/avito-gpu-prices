@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-03T02:00:20.460828+00:00",
+  "updated_at": "2026-07-03T06:55:30.758696+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 72,
-  "coverage_percent": 72.7,
+  "parsed_models": 73,
+  "coverage_percent": 73.7,
   "failed_models": [
-    "AMD Radeon RX 6700",
     "AMD Radeon RX 6650 XT",
     "AMD Radeon RX 6600 XT",
     "AMD Radeon RX 6600",
@@ -35,6 +34,14 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "AMD Radeon RX 6700",
+      "average_price": 20550,
+      "min_safe_price": 18999,
+      "max_fair_price": 22998,
+      "scam_threshold": 8220,
+      "sample_size": 34
+    },
     {
       "model": "AMD Radeon RX 6700 XT",
       "average_price": 20000,
