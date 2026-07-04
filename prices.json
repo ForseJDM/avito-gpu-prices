@@ -1,13 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-04T16:55:06.011143+00:00",
+  "updated_at": "2026-07-04T20:45:13.874674+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 85,
-  "coverage_percent": 85.9,
+  "parsed_models": 87,
+  "coverage_percent": 87.9,
   "failed_models": [
-    "AMD Radeon RX 580",
-    "AMD Radeon RX 570",
     "AMD Radeon RX 560",
     "AMD Radeon RX 550",
     "AMD Radeon RX 480",
@@ -55,6 +53,14 @@
       "sample_size": 31
     },
     {
+      "model": "AMD Radeon RX 570",
+      "average_price": 4000,
+      "min_safe_price": 3470,
+      "max_fair_price": 4525,
+      "scam_threshold": 1600,
+      "sample_size": 28
+    },
+    {
       "model": "AMD Radeon RX 5700",
       "average_price": 11930,
       "min_safe_price": 10541,
@@ -69,6 +75,14 @@
       "max_fair_price": 12492,
       "scam_threshold": 4622,
       "sample_size": 28
+    },
+    {
+      "model": "AMD Radeon RX 580",
+      "average_price": 4000,
+      "min_safe_price": 3400,
+      "max_fair_price": 5195,
+      "scam_threshold": 1600,
+      "sample_size": 35
     },
     {
       "model": "AMD Radeon RX 590",
