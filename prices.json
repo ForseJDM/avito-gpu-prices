@@ -1,13 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-04T01:58:56.323945+00:00",
+  "updated_at": "2026-07-04T06:41:34.775696+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 79,
-  "coverage_percent": 79.8,
+  "parsed_models": 81,
+  "coverage_percent": 81.8,
   "failed_models": [
-    "AMD Radeon RX 5700",
-    "AMD Radeon RX 5600 XT",
     "AMD Radeon RX 5600",
     "AMD Radeon RX 5500 XT",
     "AMD Radeon RX 5500",
@@ -28,6 +26,22 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "AMD Radeon RX 5600 XT",
+      "average_price": 9500,
+      "min_safe_price": 8245,
+      "max_fair_price": 10945,
+      "scam_threshold": 3800,
+      "sample_size": 31
+    },
+    {
+      "model": "AMD Radeon RX 5700",
+      "average_price": 11930,
+      "min_safe_price": 10541,
+      "max_fair_price": 12825,
+      "scam_threshold": 4772,
+      "sample_size": 28
+    },
     {
       "model": "AMD Radeon RX 5700 XT",
       "average_price": 11555,
