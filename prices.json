@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-04T10:01:32.924086+00:00",
+  "updated_at": "2026-07-04T13:01:34.729914+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 83,
-  "coverage_percent": 83.8,
+  "parsed_models": 84,
+  "coverage_percent": 84.8,
   "failed_models": [
-    "AMD Radeon RX 5500",
     "AMD Radeon RX 590",
     "AMD Radeon RX 580",
     "AMD Radeon RX 570",
@@ -24,6 +23,14 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "AMD Radeon RX 5500",
+      "average_price": 6395,
+      "min_safe_price": 5197,
+      "max_fair_price": 8050,
+      "scam_threshold": 2558,
+      "sample_size": 28
+    },
     {
       "model": "AMD Radeon RX 5500 XT",
       "average_price": 6750,
