@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-04T20:45:13.874674+00:00",
+  "updated_at": "2026-07-05T02:06:20.150422+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 87,
-  "coverage_percent": 87.9,
+  "parsed_models": 88,
+  "coverage_percent": 88.9,
   "failed_models": [
-    "AMD Radeon RX 560",
     "AMD Radeon RX 550",
     "AMD Radeon RX 480",
     "AMD Radeon RX 470",
@@ -34,6 +33,14 @@
       "min_safe_price": 5575,
       "max_fair_price": 8125,
       "scam_threshold": 2700,
+      "sample_size": 28
+    },
+    {
+      "model": "AMD Radeon RX 560",
+      "average_price": 3061,
+      "min_safe_price": 2481,
+      "max_fair_price": 3887,
+      "scam_threshold": 1224,
       "sample_size": 28
     },
     {
