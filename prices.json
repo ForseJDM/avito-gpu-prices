@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-05T16:57:06.543890+00:00",
+  "updated_at": "2026-07-05T20:48:11.363634+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 92,
-  "coverage_percent": 92.9,
+  "parsed_models": 93,
+  "coverage_percent": 93.9,
   "failed_models": [
-    "AMD Radeon VII",
     "AMD Radeon RX Vega 64",
     "AMD Radeon RX Vega 56",
     "Intel Arc A770",
@@ -278,6 +277,14 @@
       "max_fair_price": 77250,
       "scam_threshold": 27798,
       "sample_size": 28
+    },
+    {
+      "model": "AMD Radeon VII",
+      "average_price": 18997,
+      "min_safe_price": 11750,
+      "max_fair_price": 34500,
+      "scam_threshold": 7599,
+      "sample_size": 39
     },
     {
       "model": "NVIDIA GeForce GTX 1050",
