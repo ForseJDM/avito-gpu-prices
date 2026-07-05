@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-05T02:06:20.150422+00:00",
+  "updated_at": "2026-07-05T07:01:08.567394+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 88,
-  "coverage_percent": 88.9,
+  "parsed_models": 89,
+  "coverage_percent": 89.9,
   "failed_models": [
-    "AMD Radeon RX 550",
     "AMD Radeon RX 480",
     "AMD Radeon RX 470",
     "AMD Radeon RX 460",
@@ -19,6 +18,14 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "AMD Radeon RX 550",
+      "average_price": 2550,
+      "min_safe_price": 2014,
+      "max_fair_price": 3300,
+      "scam_threshold": 1020,
+      "sample_size": 25
+    },
     {
       "model": "AMD Radeon RX 5500",
       "average_price": 6395,
