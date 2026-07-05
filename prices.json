@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-05T10:04:41.183559+00:00",
+  "updated_at": "2026-07-05T13:09:17.622647+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 90,
-  "coverage_percent": 90.9,
+  "parsed_models": 91,
+  "coverage_percent": 91.9,
   "failed_models": [
-    "AMD Radeon RX 470",
     "AMD Radeon RX 460",
     "AMD Radeon VII",
     "AMD Radeon RX Vega 64",
@@ -17,6 +16,14 @@
     "Intel Arc A380"
   ],
   "prices": [
+    {
+      "model": "AMD Radeon RX 470",
+      "average_price": 3230,
+      "min_safe_price": 2700,
+      "max_fair_price": 3990,
+      "scam_threshold": 1292,
+      "sample_size": 29
+    },
     {
       "model": "AMD Radeon RX 480",
       "average_price": 4410,
