@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-06T02:11:51.329151+00:00",
+  "updated_at": "2026-07-06T08:11:19.645612+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 94,
-  "coverage_percent": 94.9,
+  "parsed_models": 95,
+  "coverage_percent": 96.0,
   "failed_models": [
-    "AMD Radeon RX Vega 56",
     "Intel Arc A770",
     "Intel Arc A750",
     "Intel Arc A580",
@@ -276,6 +275,14 @@
       "max_fair_price": 77250,
       "scam_threshold": 27798,
       "sample_size": 28
+    },
+    {
+      "model": "AMD Radeon RX Vega 56",
+      "average_price": 8250,
+      "min_safe_price": 6992,
+      "max_fair_price": 25375,
+      "scam_threshold": 3300,
+      "sample_size": 34
     },
     {
       "model": "AMD Radeon RX Vega 64",
