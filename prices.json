@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-06T08:11:19.645612+00:00",
+  "updated_at": "2026-07-06T15:00:26.741731+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 95,
-  "coverage_percent": 96.0,
+  "parsed_models": 96,
+  "coverage_percent": 97.0,
   "failed_models": [
-    "Intel Arc A770",
     "Intel Arc A750",
     "Intel Arc A580",
     "Intel Arc A380"
@@ -299,6 +298,14 @@
       "max_fair_price": 34500,
       "scam_threshold": 7599,
       "sample_size": 39
+    },
+    {
+      "model": "Intel Arc A770",
+      "average_price": 20990,
+      "min_safe_price": 18250,
+      "max_fair_price": 24140,
+      "scam_threshold": 8396,
+      "sample_size": 35
     },
     {
       "model": "NVIDIA GeForce GTX 1050",
