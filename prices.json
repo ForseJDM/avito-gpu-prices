@@ -1,13 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-07-06T21:22:29.112675+00:00",
+  "updated_at": "2026-07-07T02:06:59.208911+00:00",
   "update_interval_hours": 24,
   "total_models": 99,
-  "parsed_models": 98,
-  "coverage_percent": 99.0,
-  "failed_models": [
-    "Intel Arc A380"
-  ],
+  "parsed_models": 99,
+  "coverage_percent": 100.0,
+  "failed_models": [],
   "prices": [
     {
       "model": "AMD Radeon RX 460",
@@ -296,6 +294,14 @@
       "max_fair_price": 34500,
       "scam_threshold": 7599,
       "sample_size": 39
+    },
+    {
+      "model": "Intel Arc A380",
+      "average_price": 10000,
+      "min_safe_price": 7992,
+      "max_fair_price": 12748,
+      "scam_threshold": 4000,
+      "sample_size": 30
     },
     {
       "model": "Intel Arc A580",
